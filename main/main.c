@@ -9,7 +9,11 @@ static const char *TAG = "I2C Example";
 #define I2C_SDA_IO CONFIG_I2C_MASTER_SDA // GPIO number used for I2C master data
 #define I2C_PORT_NUM I2C_NUM_0           // I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip
 #define I2C_FREQ_HZ 100000               // I2C master clock frequency
-#define I2C_TIMEOUT_MS 1000
+#define I2C_TIMEOUT_MS 1000              // I2C timeout in milliseconds
+
+// Setup I2C buffer sizes
+#define I2C_READ_BUFF_SIZE 14            // I2C max read buffer size
+#define I2C_WRITE_BUFF_SIZE 2            // i2c max write buffer size
 
 // MPU config registers
 #define MPU_ADR_REG 0x68            // Slave address of the MPU6050 sensor
@@ -103,25 +107,23 @@ AFS_SEL Full Scale Range
 // Custom typedefs
 typedef struct mpu_data_type
 {
-    int16_t accel_gyro_raw[12]; // reads raw
-    int32_t accel_gyro_avg_deviation[6];
-    double accel_gyro_g[6];
+    int16_t accel_gyro_raw[12]; // for reading raw accel and gyro data from MPU6050
+    int32_t accel_gyro_avg_deviation[6];    // average deviation of the accel and gyro
+    double accel_gyro_g[6]; // accel gyro converted to g and deg/s
 } mpu_data_type;
 
 typedef struct i2c_buffer_type
 {
-    uint8_t read_buffer[14];
-    uint8_t read_size;
-    uint8_t write_buffer[2];
-    uint8_t write_size;
+    uint8_t read_buffer[I2C_READ_BUFF_SIZE];    // read buffer
+    uint8_t write_buffer[I2C_WRITE_BUFF_SIZE];  // write buffer
 } i2c_buffer_type;
 
 // Init functions
 void print_binary(uint8_t *);
 void init_i2c(void);
 void mpu_initial_setup(i2c_buffer_type *);
-void mpu_read_from_reg(i2c_buffer_type *);
-void mpu_write_to_reg(i2c_buffer_type *);
+void mpu_transmit_receive(i2c_buffer_type *, uint8_t, uint8_t);
+void mpu_transmit(i2c_buffer_type *, uint8_t);
 
 // Global variables
 mpu_data_type mpu_data = {
@@ -131,9 +133,7 @@ mpu_data_type mpu_data = {
 
 i2c_buffer_type i2c_buffer = {
     .read_buffer = {0},
-    .read_size = 0,
     .write_buffer = {0},
-    .write_size = 0,
 };
 
 // Master configuration
@@ -158,17 +158,21 @@ i2c_master_dev_handle_t master_dev_handle;
 void app_main(void)
 {
     // Initialize the I2C bus
-    printf("\nInitialize the I2C bus\n");
     init_i2c();
+
+    // Setup the MPU6050 registers
+    mpu_initial_setup(&i2c_buffer);
+
+
 
     // // Configure user control register
     // write_buffer[0] = MPU_USER_CTRL_REG;
     // write_buffer[1] = 0x40; // Enable FIFO
-    // mpu_write_to_reg(write_buffer, 2);
+    // mpu_transmit(write_buffer, 2);
 
     // // Read user control register
     // write_buffer[0] = MPU_USER_CTRL_REG;
-    // mpu_read_from_reg(write_buffer, 1, read_buffer, 1); // Should be 0x40h (64d)
+    // mpu_transmit_receive(write_buffer, 1, read_buffer, 1); // Should be 0x40h (64d)
 
     // Read MPU data registers
     // while (true)
@@ -187,7 +191,7 @@ void app_main(void)
     //     printf("%.2f; %.2f; %.2f\n", mpu_data.accel_x_g, mpu_data.accel_y_g, mpu_data.accel_z_g);
     // }
 
-    // ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
+    ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
 }
 
 /*
@@ -195,7 +199,7 @@ void app_main(void)
  *
  * @param n: number to be printed in binary
  * @return void
- */
+ * */
 void print_binary(uint8_t *n)
 {
     printf("binary: ");
@@ -227,88 +231,113 @@ void init_i2c()
 }
 
 /*
- * Set up the MPU6050 registers
- *
  * Set up the MPU6050 registers for the first time. MPU is set to wake up, filter freq is set to 5Hz,
  * accelerometer to +-8g full scale range and gyroscope to +-1000 deg/s full scale range.
  * The FIFO buffer is set to store accelerometer and gyroscope data.
  *
- * @param i2c_buffer: struct with read_buffer, read_size, write_buffer and write_size
+ * @param i2c_buffer: struct with write_buffer, read_buffer  
  * @return void
  */
 void mpu_initial_setup(i2c_buffer_type *i2c_buffer)
 {
     // Wake up the MPU6050
-    i2c_buffer->write_size = 2;
     i2c_buffer->write_buffer[0] = MPU_PWR_REG;
     i2c_buffer->write_buffer[1] = 0x00; // wake up signal
-    mpu_write_to_reg(i2c_buffer);
+    mpu_transmit(i2c_buffer, 2); // write 
 
     // Set filter freq
     i2c_buffer->write_buffer[0] = MPU_FILTER_FREQ_REG;
     i2c_buffer->write_buffer[1] = MPU_FILTER_FREQ_5Hz;
-    mpu_write_to_reg(i2c_buffer);
+    mpu_transmit(i2c_buffer, 2);
 
     // Set accelerometer to +-8g full scale range
     i2c_buffer->write_buffer[0] = MPU_ACCEL_CFG_REG;
     i2c_buffer->write_buffer[1] = MPU_ACCEL_SET_FS_8g;
-    mpu_write_to_reg(i2c_buffer);
+    mpu_transmit(i2c_buffer, 2);
 
     // Set gyroscope to +-1000 deg/s full scale range
     i2c_buffer->write_buffer[0] = MPU_GYRO_CFG_REG;
     i2c_buffer->write_buffer[1] = MPU_GYRO_SET_FS_1000deg;
-    mpu_write_to_reg(i2c_buffer);
+    mpu_transmit(i2c_buffer, 2);
 
     // Set what data is stored in the FIFO buffer
     i2c_buffer->write_buffer[0] = MPU_FIFO_ENBL_MASK_REG;
     i2c_buffer->write_buffer[1] = MPU_FIFO_ENBL_ACCEL_GYRO; // Enable gyro and accelerometer data (no tamp and slave)
-    mpu_write_to_reg(i2c_buffer);
+    mpu_transmit(i2c_buffer, 2);
 
     // Check the integrity of the configured registers
     i2c_buffer->write_buffer[0] = MPU_PWR_REG;
-    i2c_buffer->write_size = 1;
-    mpu_read_from_reg(i2c_buffer); // Should be 0x00h (0d)
+    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x00h (0d)
 
     i2c_buffer->write_buffer[0] = MPU_FILTER_FREQ_REG;
-    mpu_read_from_reg(i2c_buffer); // Should be 0x05h (5d)
+    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x05h (5d)
 
     i2c_buffer->write_buffer[0] = MPU_ACCEL_CFG_REG;
-    mpu_read_from_reg(i2c_buffer); // Should be 0x10h (16d)
+    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x10h (16d)
 
     i2c_buffer->write_buffer[0] = MPU_GYRO_CFG_REG;
-    mpu_read_from_reg(i2c_buffer); // Should be 0x10h (16d)
+    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x10h (16d)
 
     i2c_buffer->write_buffer[0] = MPU_FIFO_ENBL_MASK_REG;
-    mpu_read_from_reg(i2c_buffer); // Should be 0x78h (120d)
+    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x78h (120d)
 }
 
 /*
- * Read data from specific MPU6050 register
+ * Transmit MPU register data and read it's value.
  *
- * @param i2c_buffer: struct with read_buffer, read_size, write_buffer and write_size
+ * MCU_write -> REG_ADDR -> MCU_read <- REG_VALUE(s)
+ * 
+ * Before transmision, you have to first setup the write_buffer
+ * i2c_buffer.write_buffer[write_buf_size]
+ * [0] - register address
+ * 
+ * To read multiple values, set the read_buf_size to greater than 1.
+ * Reading multiple values usually means reading subsequent registers.
+ *
+ * @param i2c_buffer: struct with read_buffer, write_buffer
+ * @param write_buf_size: i2c_buffer.wirte_buffer size (how many values to transmit)
+ * @param read_buf_size: i2c_buffer.read_buffer size (how many values to receive)
  *
  * @return void
  */
-void mpu_read_from_reg(i2c_buffer_type *i2c_buffer)
+void mpu_transmit_receive(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size, uint8_t read_buf_size)
 {
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(master_dev_handle, i2c_buffer->write_buffer, i2c_buffer->write_size, i2c_buffer->read_buffer, i2c_buffer->read_size, I2C_TIMEOUT_MS));
+    if (sizeof(i2c_buffer->write_buffer) < write_buf_size)
+    {
+        ESP_LOGI(TAG, "The allocated i2c_buffer.write_buffer size is smaller than %d", write_buf_size);
+        return;
+    }
+    if (sizeof(i2c_buffer->read_buffer) < read_buf_size)
+    {
+        ESP_LOGI(TAG, "The allocated i2c_buffer.read_buffer size is smaller than %d", read_buf_size);
+        return;
+    }
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(master_dev_handle, i2c_buffer->write_buffer, write_buf_size, i2c_buffer->read_buffer, read_buf_size, I2C_TIMEOUT_MS));
 }
 
 /*
  * Write data to specific MPU6050 register
  *
- * i2c_buffer->write_buffer[2]
+ * MCU_write -> REG_ADDR -> REG_VALUE
+ * 
+ * Before transmision, you have to first setup the write_buffer
+ * i2c_buffer->write_buffer[I2C_WRITE_BUFF_SIZE]
  * [0] - register address
  * [1] - data to write
  *
  * @param write_buffer: buffer with the register address at [0] and data at [1]
- * @param wr_size: size has to be equal to 2
+ * @param write_buf_size: Write buffer size (how many values to transmit)
  *
  * @return void
  */
-void mpu_write_to_reg(i2c_buffer_type *i2c_buffer)
+void mpu_transmit(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size)
 {
-    ESP_ERROR_CHECK(i2c_master_transmit(master_dev_handle, i2c_buffer->write_buffer, i2c_buffer->write_size, I2C_TIMEOUT_MS));
+    if (sizeof(i2c_buffer->write_buffer) < write_buf_size)
+    {
+        ESP_LOGI(TAG, "The allocated i2c_buffer.write_buffer size is smaller than %d", write_buf_size);
+        return;
+    }
+    ESP_ERROR_CHECK(i2c_master_transmit(master_dev_handle, i2c_buffer->write_buffer, write_buf_size, I2C_TIMEOUT_MS));
 }
 
 // /*
@@ -324,12 +353,12 @@ void mpu_write_to_reg(i2c_buffer_type *i2c_buffer)
 //  */
 // void mpu_read_fifo_buffer(mpu_data_type *mpu_data)
 // {
-//     mpu_read_from_reg(mpu_data->fifo_read_buffer, 1, read_buffer, 2);
+//     mpu_transmit_receive(mpu_data->fifo_read_buffer, 1, read_buffer, 2);
 //     fifo_count = (read_buffer[0] << 8) | read_buffer[1];
 //     if (fifo_count >= fifo_bytes)
 //     {
 //         write_buffer[0] = MPU_FIFO_DATA_REG;
-//         mpu_read_from_reg(write_buffer, 1, read_buffer, 12);
+//         mpu_transmit_receive(write_buffer, 1, read_buffer, 12);
 
 //         if (reset_fifo)
 //             mpu_reset_fifo();
@@ -345,10 +374,10 @@ void mpu_write_to_reg(i2c_buffer_type *i2c_buffer)
 // void mpu_read_accel_and_gyro()
 // {
 //     write_buffer[0] = MPU_ACCEL_X_H; // 0x3B
-//     mpu_read_from_reg(write_buffer, 1, read_buffer, 6);
+//     mpu_transmit_receive(write_buffer, 1, read_buffer, 6);
 
 //     write_buffer[0] = MPU_GYRO_X_H; // 0x43
-//     mpu_read_from_reg(write_buffer, 1, &read_buffer[6], 6);
+//     mpu_transmit_receive(write_buffer, 1, &read_buffer[6], 6);
 // }
 
 // /*
@@ -403,7 +432,7 @@ void mpu_write_to_reg(i2c_buffer_type *i2c_buffer)
 //  */
 // void mpu_reset_fifo()
 // {
-//     mpu_write_to_reg(fifo_reset_buffer, 2);
+//     mpu_transmit(fifo_reset_buffer, 2);
 // }
 
 // /*
