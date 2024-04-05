@@ -105,11 +105,18 @@ AFS_SEL Full Scale Range
 #define MPU_ACCEL_SET_FS_16g 0x18
 
 // Custom typedefs
+
+/**
+ * @brief MPU6050 data struct.
+ * 
+ * This structure is designed to hold the raw accelerometer and gyroscope data from the MPU6050 sensor,
+ * as well as the computed average deviation and data converted to g and degrees per second (deg/s).
+ */
 typedef struct mpu_data_type
 {
-    int16_t accel_gyro_raw[12];          // for reading raw accel and gyro data from MPU6050
-    int32_t accel_gyro_avg_deviation[6]; // average deviation of the accel and gyro
-    double accel_gyro_g[6];              // accel gyro converted to g and deg/s
+    int16_t accel_gyro_raw[12];
+    int32_t accel_gyro_avg_deviation[6];
+    double accel_gyro_g[6];
 } mpu_data_type;
 
 typedef struct i2c_buffer_type
@@ -179,9 +186,9 @@ void app_main(void)
         vTaskDelay(10 / portTICK_PERIOD_MS);
 
         // Read FIFO buffer
-        mpu_read_fifo_buffer(12, true);
-        mpu_extract_buffer(false);
-        mpu_scale_accel_gyro();
+        mpu_read_fifo_buffer(&i2c_buffer);
+        mpu_extract_buffer(&i2c_buffer, &mpu_data);
+        // mpu_scale_accel_gyro();
 
         // printf("%.1f, %.1f, %.1f", accel_x_g, accel_y_g, accel_z_g);
         // printf("%.2f; %.2f; %.2f\n", accel_x_g, accel_y_g, accel_z_g);
@@ -366,8 +373,8 @@ void mpu_transmit_receive(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size, u
  * [0] - register address
  * [1] - data to write
  *
- * @param write_buffer: buffer with the register address at [0] and data at [1]
- * @param write_buf_size: Write buffer size (how many values to transmit)
+ * @param i2c_buffer: struct with read_buffer, write_buffer
+ * @param write_buf_size: i2c_buffer.wirte_buffer size (how many values to transmit)
  *
  * @return void
  */
@@ -387,25 +394,13 @@ void mpu_transmit(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size)
  * You first have to set up the FIFO buffer to store just the
  * accel and gyro data.
  *
- * @param fifo_bytes: number of bytes to read from the FIFO buffer
- * @param reset_fifo: reset the FIFO buffer after reading
- *
+ * @param i2c_buffer: struct with read_buffer, write_buffer
  * @return void
  */
-void mpu_read_fifo_buffer(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
+void mpu_read_fifo_buffer(i2c_buffer_type *i2c_buffer)
 {
-    // First read FIFO count to make sure it is at least 12 bytes long (accel and gyro high and low registers)
-    i2c_buffer->write_buffer[0] = MPU_FIFO_COUNT_H_REG;
-    mpu_transmit_receive(i2c_buffer, 1, 2);
-    uint16_t fifo_count = (i2c_buffer->read_buffer[0] << 8) | i2c_buffer->read_buffer[1];
-    if (fifo_count >= 12)
-    {
-        i2c_buffer->write_buffer[0] = MPU_FIFO_DATA_REG;
-        mpu_transmit_receive(write_buffer, 1, read_buffer, 12);
-
-        if (reset_fifo)
-            mpu_reset_fifo();
-    }
+    i2c_buffer->write_buffer[0] = MPU_FIFO_DATA_REG;
+    mpu_transmit_receive(i2c_buffer, 1, 12);
 }
 
 // /*
@@ -423,29 +418,27 @@ void mpu_read_fifo_buffer(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
 //     mpu_transmit_receive(write_buffer, 1, &read_buffer[6], 6);
 // }
 
-// /*
-//  * Extract gyro, temperature and accel data
-//  *
-//  * After reading FIFO buffer, the data has to be extracted from buffer
-//  * and converted to uint16_t values. Subsequent pairs of registers are
-//  * combined to form the final value.
-//  */
-// void mpu_extract_buffer(bool with_temp)
-// {
-//     uint8_t shift = 0;
-//     // Extract data from the read buffer
-//     accel_x = (read_buffer[0] << 8) | read_buffer[1];
-//     accel_y = (read_buffer[2] << 8) | read_buffer[3];
-//     accel_z = (read_buffer[4] << 8) | read_buffer[5];
-//     if (with_temp)
-//     {
-//         temperature = (read_buffer[6] << 8) | read_buffer[7]; // Not used
-//         ++shift;
-//     }
-//     gyro_x = (read_buffer[6 + shift] << 8) | read_buffer[7 + shift];
-//     gyro_y = (read_buffer[8 + shift] << 8) | read_buffer[9 + shift];
-//     gyro_z = (read_buffer[10 + shift] << 8) | read_buffer[11 + shift];
-// }
+/**
+ * @brief Extract accel and gyro data from i2c buffer
+ *
+ * After reading FIFO buffer, the data has to be extracted from buffer 
+ * and converted to uint16_t values. Subsequent pairs of registers are
+ * combined to form the final values.
+ * 
+ * @param i2c_buffer: struct with read_buffer, write_buffer
+ * @param mpu_data: struct with accel_gyro_raw
+ * 
+ */
+void mpu_extract_buffer(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
+{
+    mpu_data->accel_gyro_raw[0] = (i2c_buffer->read_buffer[0] << 8) | i2c_buffer->read_buffer[1];
+    mpu_data->accel_gyro_raw[1] = (i2c_buffer->read_buffer[2] << 8) | i2c_buffer->read_buffer[3];
+    mpu_data->accel_gyro_raw[2] = (i2c_buffer->read_buffer[4] << 8) | i2c_buffer->read_buffer[5];
+    mpu_data->accel_gyro_raw[3] = (i2c_buffer->read_buffer[6] << 8) | i2c_buffer->read_buffer[7];
+    mpu_data->accel_gyro_raw[4] = (i2c_buffer->read_buffer[8] << 8) | i2c_buffer->read_buffer[9];
+    mpu_data->accel_gyro_raw[5] = (i2c_buffer->read_buffer[10] << 8) | i2c_buffer->read_buffer[11];
+}
+
 
 // /*
 //  * Scale mpu readings to full scale range
