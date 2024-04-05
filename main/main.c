@@ -124,6 +124,9 @@ void init_i2c(void);
 void mpu_initial_setup(i2c_buffer_type *);
 void mpu_transmit_receive(i2c_buffer_type *, uint8_t, uint8_t);
 void mpu_transmit(i2c_buffer_type *, uint8_t);
+void mpu_enable_fifo(i2c_buffer_type *);
+void mpu_reset_fifo_buffer(i2c_buffer_type *);
+uint16_t mpu_read_fifo_count(i2c_buffer_type *);
 
 // Global variables
 mpu_data_type mpu_data = {
@@ -170,10 +173,10 @@ void app_main(void)
     while (true)
     {
         // Clear the FIFO buffer to start fresh
-        mpu_reset_fifo(&i2c_buffer);
+        mpu_reset_fifo_buffer(&i2c_buffer);
 
         // Delay for at least 1 ms to allow the FIFO buffer to fill up
-        vTaskDelay(10 / portTICK_PERIOD_MS); // wait 5 ms
+        vTaskDelay(10 / portTICK_PERIOD_MS);
 
         // Read FIFO buffer
         mpu_read_fifo_buffer(12, true);
@@ -188,8 +191,8 @@ void app_main(void)
     ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
 }
 
-/*
- * Print binary representation of a number
+/**
+ * @brief Print binary representation of a number
  *
  * @param n: number to be printed in binary
  * @return void
@@ -205,8 +208,8 @@ void print_binary(uint8_t *n)
     printf("\n");
 }
 
-/*
- * Initialize the I2C bus
+/**
+ * @brief Initialize the I2C bus
  *
  * Add new master bus and MPU6050 as a slave device
  * Slave address of the MPU6050 sensor is 0x68
@@ -224,7 +227,9 @@ void init_i2c()
     ESP_LOGI(TAG, "I2C initialized successfully");
 }
 
-/*
+/**
+ * @brief Set up the MPU6050 registers for the first time
+ *
  * Set up the MPU6050 registers for the first time. MPU is set to wake up, filter freq is set to 5Hz,
  * accelerometer to +-8g full scale range and gyroscope to +-1000 deg/s full scale range.
  * The FIFO buffer is set to store accelerometer and gyroscope data.
@@ -276,12 +281,12 @@ void mpu_initial_setup(i2c_buffer_type *i2c_buffer)
     mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x78h (120d)
 }
 
-/*
-* Enable the FIFO buffer of the MPU6050 sensor
-*
-* @param i2c_buffer: struct with write_buffer, read_buffer
-* @return void
-*/
+/**
+ * @brief Enable the FIFO buffer of the MPU6050 sensor
+ *
+ * @param i2c_buffer: struct with write_buffer, read_buffer
+ * @return void
+ */
 void mpu_enable_fifo(i2c_buffer_type *i2c_buffer)
 {
     i2c_buffer->write_buffer[0] = MPU_FIFO_CTRL_REG;
@@ -289,13 +294,13 @@ void mpu_enable_fifo(i2c_buffer_type *i2c_buffer)
     mpu_transmit(i2c_buffer, 2);
 }
 
-/*
-* Reset the FIFO buffer of the MPU6050 sensor
-*
-* @param i2c_buffer: struct with write_buffer, read_buffer
-* @return void
-*/
-void mpu_reset_fifo(i2c_buffer_type *i2c_buffer)
+/**
+ * @brief Reset the FIFO buffer of the MPU6050 sensor
+ *
+ * @param i2c_buffer: struct with write_buffer, read_buffer
+ * @return void
+ */
+void mpu_reset_fifo_buffer(i2c_buffer_type *i2c_buffer)
 {
     // Fifo reset bit = 0x04 and fifo enable bit = 0x40
     // Therefore reset and enable FIFO = 0x44
@@ -304,8 +309,22 @@ void mpu_reset_fifo(i2c_buffer_type *i2c_buffer)
     mpu_transmit(i2c_buffer, 2);
 }
 
-/*
- * Transmit MPU register data and read it's value.
+/**
+ * @brief  the FIFO count register of the MPU6050 sensor
+ *
+ * @param i2c_buffer: struct with write_buffer, read_buffer
+ * @return fifo_count: number of bytes stored in the FIFO buffer
+ */
+uint16_t mpu_read_fifo_count(i2c_buffer_type *i2c_buffer)
+{
+    i2c_buffer->write_buffer[0] = MPU_FIFO_COUNT_H_REG;
+    mpu_transmit_receive(i2c_buffer, 1, 2);
+    uint16_t fifo_count = (i2c_buffer->read_buffer[0] << 8) | i2c_buffer->read_buffer[1];
+    return fifo_count;
+}
+
+/**
+ * @brief MPU register data and read it's value.
  *
  * MCU_write -> REG_ADDR -> MCU_read <- REG_VALUE(s)
  *
@@ -337,8 +356,8 @@ void mpu_transmit_receive(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size, u
     ESP_ERROR_CHECK(i2c_master_transmit_receive(master_dev_handle, i2c_buffer->write_buffer, write_buf_size, i2c_buffer->read_buffer, read_buf_size, I2C_TIMEOUT_MS));
 }
 
-/*
- * Write data to specific MPU6050 register
+/**
+ * @brief Write data to specific MPU6050 register
  *
  * MCU_write -> REG_ADDR -> REG_VALUE
  *
@@ -362,8 +381,8 @@ void mpu_transmit(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size)
     ESP_ERROR_CHECK(i2c_master_transmit(master_dev_handle, i2c_buffer->write_buffer, write_buf_size, I2C_TIMEOUT_MS));
 }
 
-/*
- * Read data from the FIFO buffer of the MPU6050 sensor
+/**
+ * @brief Read data from the FIFO buffer of the MPU6050 sensor
  *
  * You first have to set up the FIFO buffer to store just the
  * accel and gyro data.
