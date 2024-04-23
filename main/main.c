@@ -41,6 +41,9 @@ void init_i2c(void);
 void mpu_initial_setup(i2c_buffer_type *);
 void mpu_transmit_receive(i2c_buffer_type *, uint8_t, uint8_t);
 void mpu_transmit(i2c_buffer_type *, uint8_t);
+void mpu_enable_fifo(i2c_buffer_type *);
+void mpu_reset_fifo_buffer(i2c_buffer_type *);
+uint16_t mpu_read_fifo_count(i2c_buffer_type *);
 
 mpu_data_type mpu_data = {
     .accel_gyro_raw = {0},
@@ -122,6 +125,8 @@ void print_binary(uint8_t *n)
     printf("\n");
 }
 
+/**
+ * @brief Initialize the I2C bus
 /**
  * @brief Initialize the I2C bus
  *
@@ -231,6 +236,8 @@ void mpu_transmit_receive(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size, u
 
 /**
  * @brief Write data to specific MPU6050 register
+/**
+ * @brief Write data to specific MPU6050 register
  *
  * MCU_write -> REG_ADDR -> REG_VALUE
  *
@@ -239,8 +246,8 @@ void mpu_transmit_receive(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size, u
  * [0] - register address
  * [1] - data to write
  *
- * @param write_buffer: buffer with the register address at [0] and data at [1]
- * @param write_buf_size: Write buffer size (how many values to transmit)
+ * @param i2c_buffer: struct with read_buffer, write_buffer
+ * @param write_buf_size: i2c_buffer.wirte_buffer size (how many values to transmit)
  *
  * @return void
  */
