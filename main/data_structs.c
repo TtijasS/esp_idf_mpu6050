@@ -2,7 +2,7 @@
 
 mpu_data_type mpu_data = {
 	.accel_gyro_raw = {0},
-	.accel_gyro_avg_deviation = {0},
+	.accel_gyro_avg_err = {0},
 	.accel_gyro_g = {0},
 };
 

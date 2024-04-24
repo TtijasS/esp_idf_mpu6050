@@ -20,10 +20,15 @@ void app_main(void)
     mpu_fifo_reset(&i2c_buffer);
 
     // Delay for at least 1 ms to allow the FIFO buffer to fill up
-    vTaskDelay(10 / portTICK_PERIOD_MS); // wait 5 ms
+    vTaskDelay(10 / portTICK_PERIOD_MS); // wait x ms (x10 == 1ms)
 
     // Read FIFO buffer
     mpu_fifo_read_extract(&i2c_buffer, &mpu_data);
+    mpu_readings_scale(&mpu_data);
+
+    mpu_readings_avg_err(&i2c_buffer, &mpu_data, 1000);
+
+
 
     // printf("%.1f, %.1f, %.1f", accel_x_g, accel_y_g, accel_z_g);
     // printf("%.2f; %.2f; %.2f\n", accel_x_g, accel_y_g, accel_z_g);

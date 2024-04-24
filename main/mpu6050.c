@@ -1,6 +1,5 @@
 #include "mpu6050.h"
 
-
 /**
  * @brief Initial MPU6050 setup.
  *
@@ -150,7 +149,7 @@ void mpu_fifo_reset(i2c_buffer_type *i2c_buffer)
  * Functions is usefull when we need to check if the FIFO buffer is filled with enough bytes
  *
  * @param i2c_buffer: struct with read_buffer, write_buffer
- * @return uint16_t* pointer to the FIFO count value
+ * @return &fifo_count: pointer to the FIFO count value
  */
 uint16_t *mpu_fifo_count(i2c_buffer_type *i2c_buffer)
 {
@@ -170,7 +169,7 @@ uint16_t *mpu_fifo_count(i2c_buffer_type *i2c_buffer)
  * @param fifo_bytes: number of bytes to read from the FIFO buffer
  * @param reset_fifo: reset the FIFO buffer after reading
  *
- * @return void
+ * @return true if FIFO was read and extracted successfully
  */
 bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
 {
@@ -192,6 +191,59 @@ bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
 }
 
 /**
+ * @brief Takes reps number of readings and stores average values in mpu_data.accel_gyro_raw
+ *
+ * @param i2c_buffer
+ * @param mpu_data
+ * @param reps
+ * @return true if readings were successful
+ */
+bool mpu_readings_average(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, int reps)
+{
+    if (reps <= 0)
+    {
+        ESP_LOGI(TAG, "The number of repetitions must be greater than 0");
+        return false;
+    }
+
+    int readings = 0;
+    int failed_readings = 0;
+    int64_t averages[6] = {0};
+
+    while (readings < reps)
+    {
+        if (mpu_fifo_read_extract(i2c_buffer, mpu_data))
+        {
+            for (int j = 0; j < 6; ++j)
+            {
+                averages[j] += mpu_data->accel_gyro_raw[j];
+            }
+            readings++;
+            failed_readings = 0; // Reset failed count on a successful read
+        }
+        else
+        {
+            failed_readings++;
+            // If failed too many times return false to avoid infinite loop
+            if (failed_readings > 20)
+            {
+                ESP_LOGI(TAG, "Failed to read the FIFO buffer %d times", failed_readings);
+                return false;
+            }
+        }
+    }
+
+    for (int j = 0; j < 6; ++j)
+    {
+        if (averages[j] != 0)
+            mpu_data->accel_gyro_g[j] = (averages[j] / readings;
+        else
+            mpu_data->accel_gyro_g[j] = 0;
+    }
+    return true;
+}
+
+/**
  * @brief Extract gyro and accel data
  *
  * After reading FIFO buffer, the data has to be extracted from buffer
@@ -200,9 +252,11 @@ bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
  */
 void mpu_fifo_extract_buffer(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
 {
-    for (int i = 0; i < 12; i += 2)
+    int j = 0;
+    for (int i = 0; i < 6; ++i)
     {
-        mpu_data->accel_gyro_raw[i] = (i2c_buffer->read_buffer[i] << 8) | i2c_buffer->read_buffer[i + 1];
+        j = i * 2;
+        mpu_data->accel_gyro_raw[i] = (i2c_buffer->read_buffer[j] << 8) | i2c_buffer->read_buffer[j + 1];
     }
 }
 
@@ -210,23 +264,66 @@ void mpu_fifo_extract_buffer(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_dat
  * @brief Scale mpu accel and gyro reading to preset full scale range
  *
  * @param mpu_data
+ * @param accel_gyro_raw
+ * @return void
  */
-void mpu_readings_scale(mpu_data_type *mpu_data)
+void mpu_readings_scale_int16t(mpu_data_type *mpu_data, int16_t *accel_gyro_raw[6])
 {
-    mpu_data->accel_gyro_g[0] = (double)mpu_data->accel_gyro_raw[0] / MPU_ACCEL_FS;
-    mpu_data->accel_gyro_g[1] = (double)mpu_data->accel_gyro_raw[1] / MPU_ACCEL_FS;
-    mpu_data->accel_gyro_g[2] = (double)mpu_data->accel_gyro_raw[2] / MPU_ACCEL_FS;
-    mpu_data->accel_gyro_g[3] = (double)mpu_data->accel_gyro_raw[3] / MPU_GYRO_FS;
-    mpu_data->accel_gyro_g[4] = (double)mpu_data->accel_gyro_raw[4] / MPU_GYRO_FS;
-    mpu_data->accel_gyro_g[5] = (double)mpu_data->accel_gyro_raw[5] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[0] = (double)*accel_gyro_raw[0] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[1] = (double)*accel_gyro_raw[1] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[2] = (double)*accel_gyro_raw[2] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[3] = (double)*accel_gyro_raw[3] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[4] = (double)*accel_gyro_raw[4] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[5] = (double)*accel_gyro_raw[5] / MPU_GYRO_FS;
 }
 
-void mpu_readings_avg_err(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint16_t repetitions)
+/**
+ * @brief Scale mpu accel and gyro reading to preset full scale range
+ *
+ * @param mpu_data
+ * @param accel_gyro_raw
+ * @return void
+ */
+void mpu_readings_scale_int32t(mpu_data_type *mpu_data, int32_t *accel_gyro_raw[6])
+{
+    mpu_data->accel_gyro_g[0] = (double)*accel_gyro_raw[0] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[1] = (double)*accel_gyro_raw[1] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[2] = (double)*accel_gyro_raw[2] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[3] = (double)*accel_gyro_raw[3] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[4] = (double)*accel_gyro_raw[4] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[5] = (double)*accel_gyro_raw[5] / MPU_GYRO_FS;
+}
+
+/**
+ * @brief Scale mpu accel and gyro reading to preset full scale range
+ *
+ * @param mpu_data
+ * @param accel_gyro_raw
+ * @return void
+ */
+void mpu_readings_scale_int64t(mpu_data_type *mpu_data, int64_t *accel_gyro_raw[6])
+{
+    mpu_data->accel_gyro_g[0] = (double)*accel_gyro_raw[0] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[1] = (double)*accel_gyro_raw[1] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[2] = (double)*accel_gyro_raw[2] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[3] = (double)*accel_gyro_raw[3] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[4] = (double)*accel_gyro_raw[4] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[5] = (double)*accel_gyro_raw[5] / MPU_GYRO_FS;
+}
+
+/**
+ * @brief Calculate average error of the MPU6050 sensor
+ *
+ * @param i2c_buffer struct with write_buffer, read_buffer
+ * @param mpu_data struct with accel_gyro_avg_err
+ * @param reps number of readings to average
+ */
+void mpu_readings_avg_err(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint16_t reps)
 {
     // Calculate average deviation
-    uint64_t error_sum[6] = {0};
+    int64_t error_sum[6] = {0};
     uint16_t i = 0;
-    while (i < repetitions)
+    while (i < reps)
     {
         // Check if the FIFO buffer is filled with at least 12 bytes
         if (mpu_fifo_read_extract(i2c_buffer, mpu_data))
@@ -240,10 +337,25 @@ void mpu_readings_avg_err(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, 
             ++i;
         }
     }
-    mpu_data->accel_gyro_avg_deviation[0] = error_sum[0] / repetitions;
-    mpu_data->accel_gyro_avg_deviation[1] = error_sum[1] / repetitions;
-    mpu_data->accel_gyro_avg_deviation[2] = error_sum[2] / repetitions;
-    mpu_data->accel_gyro_avg_deviation[3] = error_sum[3] / repetitions;
-    mpu_data->accel_gyro_avg_deviation[4] = error_sum[4] / repetitions;
-    mpu_data->accel_gyro_avg_deviation[5] = error_sum[5] / repetitions;
+    mpu_data->accel_gyro_avg_err[0] = (double)((error_sum[0] / reps) / MPU_ACCEL_FS);
+    mpu_data->accel_gyro_avg_err[1] = (double)((error_sum[1] / reps) / MPU_ACCEL_FS);
+    mpu_data->accel_gyro_avg_err[2] = (double)((error_sum[2] / reps) / MPU_ACCEL_FS);
+    mpu_data->accel_gyro_avg_err[3] = (double)((error_sum[3] / reps) / MPU_GYRO_FS);
+    mpu_data->accel_gyro_avg_err[4] = (double)((error_sum[4] / reps) / MPU_GYRO_FS);
+    mpu_data->accel_gyro_avg_err[5] = (double)((error_sum[5] / reps) / MPU_GYRO_FS);
+}
+
+/**
+ * @brief Substract the average error from the MPU6050 readings
+ *
+ * @param mpu_data mpu data struct with accel_gyro_raw, accel_gyro_avg_err, accel_gyro_g
+ */
+void mpu_readings_substract_err(mpu_data_type *mpu_data)
+{
+    mpu_data->accel_gyro_g[0] -= mpu_data->accel_gyro_avg_err[0];
+    mpu_data->accel_gyro_g[1] -= mpu_data->accel_gyro_avg_err[1];
+    mpu_data->accel_gyro_g[2] -= mpu_data->accel_gyro_avg_err[2];
+    mpu_data->accel_gyro_g[3] -= mpu_data->accel_gyro_avg_err[3];
+    mpu_data->accel_gyro_g[4] -= mpu_data->accel_gyro_avg_err[4];
+    mpu_data->accel_gyro_g[5] -= mpu_data->accel_gyro_avg_err[5];
 }
