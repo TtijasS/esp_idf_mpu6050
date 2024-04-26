@@ -24,7 +24,7 @@ void app_main(void)
 
     // Read FIFO buffer
     mpu_fifo_read_extract(&i2c_buffer, &mpu_data);
-    mpu_readings_scale(&mpu_data);
+    mpu_readings_to_fs(&mpu_data);
 
     mpu_readings_avg_err(&i2c_buffer, &mpu_data, 1000);
 
