@@ -190,58 +190,58 @@ bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
     return true;
 }
 
-/**
- * @brief Takes reps number of readings and stores average values in mpu_data.accel_gyro_raw
- *
- * @param i2c_buffer
- * @param mpu_data
- * @param reps
- * @return true if readings were successful
- */
-bool mpu_readings_average(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, int reps)
-{
-    if (reps <= 0)
-    {
-        ESP_LOGI(TAG, "The number of repetitions must be greater than 0");
-        return false;
-    }
+// /**
+//  * @brief Takes readings number of readings and stores average values in mpu_data.accel_gyro_raw
+//  *
+//  * @param i2c_buffer
+//  * @param mpu_data
+//  * @param readings
+//  * @return true if readings were successful
+//  */
+// bool mpu_data_averaged(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, int readings)
+// {
+//     if (readings <= 0)
+//     {
+//         ESP_LOGI(TAG, "The number of repetitions must be greater than 0");
+//         return false;
+//     }
 
-    int readings = 0;
-    int failed_readings = 0;
-    int64_t averages[6] = {0};
+//     int readings = 0;
+//     int failed_readings = 0;
+//     int64_t averages[6] = {0};
 
-    while (readings < reps)
-    {
-        if (mpu_fifo_read_extract(i2c_buffer, mpu_data))
-        {
-            for (int i = 0; i < 6; ++i)
-            {
-                averages[i] += mpu_data->accel_gyro_raw[i];
-            }
-            readings++;
-            failed_readings = 0; // Reset failed count on a successful read
-        }
-        else
-        {
-            failed_readings++;
-            // If failed too many times return false to avoid infinite loop
-            if (failed_readings > 20)
-            {
-                ESP_LOGI(TAG, "Failed to read the FIFO buffer %d times", failed_readings);
-                return false;
-            }
-        }
-    }
+//     while (readings < readings)
+//     {
+//         if (mpu_fifo_read_extract(i2c_buffer, mpu_data))
+//         {
+//             for (int i = 0; i < 6; ++i)
+//             {
+//                 averages[i] += mpu_data->accel_gyro_raw[i];
+//             }
+//             readings++;
+//             failed_readings = 0; // Reset failed count on a successful read
+//         }
+//         else
+//         {
+//             failed_readings++;
+//             // If failed too many times return false to avoid infinite loop
+//             if (failed_readings > 20)
+//             {
+//                 ESP_LOGI(TAG, "Failed to read the FIFO buffer %d times", failed_readings);
+//                 return false;
+//             }
+//         }
+//     }
 
-    for (int i = 0; i < 6; ++i)
-    {
-        if (averages[i] != 0)
-            mpu_data->accel_gyro_g[i] = (averages[i] / readings);
-        else
-            mpu_data->accel_gyro_g[i] = 0;
-    }
-    return true;
-}
+//     for (int i = 0; i < 6; ++i)
+//     {
+//         if (averages[i] != 0)
+//             mpu_data->accel_gyro_g[i] = (averages[i] / readings);
+//         else
+//             mpu_data->accel_gyro_g[i] = 0;
+//     }
+//     return true;
+// }
 
 /**
  * @brief Extract gyro and accel data
@@ -284,14 +284,14 @@ void mpu_data_reset(mpu_data_type *mpu_data)
  * @param accel_gyro_raw
  * @return void
  */
-void mpu_readings_to_fs(mpu_data_type *mpu_data)
+void mpu_data_to_fs(mpu_data_type *mpu_data)
 {
-    mpu_data->accel_gyro_g[0] = mpu_data->accel_gyro_g[0] / MPU_ACCEL_FS;
-    mpu_data->accel_gyro_g[1] = mpu_data->accel_gyro_g[1] / MPU_ACCEL_FS;
-    mpu_data->accel_gyro_g[2] = mpu_data->accel_gyro_g[2] / MPU_ACCEL_FS;
-    mpu_data->accel_gyro_g[3] = mpu_data->accel_gyro_g[3] / MPU_GYRO_FS;
-    mpu_data->accel_gyro_g[4] = mpu_data->accel_gyro_g[4] / MPU_GYRO_FS;
-    mpu_data->accel_gyro_g[5] = mpu_data->accel_gyro_g[5] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[0] = (double)mpu_data->accel_gyro_raw[0] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[1] = (double)mpu_data->accel_gyro_raw[1] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[2] = (double)mpu_data->accel_gyro_raw[2] / MPU_ACCEL_FS;
+    mpu_data->accel_gyro_g[3] = (double)mpu_data->accel_gyro_raw[3] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[4] = (double)mpu_data->accel_gyro_raw[4] / MPU_GYRO_FS;
+    mpu_data->accel_gyro_g[5] = (double)mpu_data->accel_gyro_raw[5] / MPU_GYRO_FS;
 }
 
 /**
@@ -299,23 +299,24 @@ void mpu_readings_to_fs(mpu_data_type *mpu_data)
  *
  * @param i2c_buffer struct with write_buffer, read_buffer
  * @param mpu_data struct with avg_err
- * @param reps number of readings to average
+ * @param readings number of readings to average
  */
-bool mpu_readings_avg_err(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint16_t reps)
+bool mpu_data_calculate_avg_err(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint16_t readings)
 {
     // Calculate average deviation
-    uint16_t readings = 0;
+    uint16_t ok_readings = 0;
     uint8_t failed_readings = 0;
-    while (readings < reps)
+    while (ok_readings < readings)
     {
         // Check if the FIFO buffer is filled with at least 12 bytes
         if (mpu_fifo_read_extract(i2c_buffer, mpu_data))
         {
+            mpu_data_substract_err(mpu_data);
             for (int i = 0; i < 6; ++i)
             {
                 mpu_data->avg_err[i] += mpu_data->accel_gyro_raw[i];
             }
-            ++readings;
+            ++ok_readings;
         }
         else
         {
@@ -326,12 +327,34 @@ bool mpu_readings_avg_err(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, 
                 return false;
             }
         }
+        if (ok_readings >= 2)
+        {
+            mpu_avg_err_divide(mpu_data, 2);
+        }
     }
+
+    return true;
+}
+
+/**
+ * @brief Dvidide avg error array by divisor. Divisor is the number 
+ * of readings, that got summed up.
+ *
+ * @param mpu_data struct with avg_err
+ * @param divisor number to divide the avg_err array with (must be != 0)
+ */
+void mpu_avg_err_divide(mpu_data_type *mpu_data, uint16_t divisor)
+{
+    if (divisor == 0)
+    {
+        ESP_LOGI(TAG, "Divisor can't be 0");
+        return;
+    }
+
     for (int i = 0; i < 6; ++i)
     {
-        mpu_data->avg_err[i] /= reps;
+        mpu_data->avg_err[i] /= divisor;
     }
-    return true;
 }
 
 /**
@@ -339,12 +362,10 @@ bool mpu_readings_avg_err(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, 
  *
  * @param mpu_data mpu data struct with accel_gyro_raw, avg_err, accel_gyro_g
  */
-void mpu_readings_substract_err(mpu_data_type *mpu_data)
+void mpu_data_substract_err(mpu_data_type *mpu_data)
 {
-    mpu_data->accel_gyro_g[0] -= mpu_data->avg_err[0];
-    mpu_data->accel_gyro_g[1] -= mpu_data->avg_err[1];
-    mpu_data->accel_gyro_g[2] -= mpu_data->avg_err[2];
-    mpu_data->accel_gyro_g[3] -= mpu_data->avg_err[3];
-    mpu_data->accel_gyro_g[4] -= mpu_data->avg_err[4];
-    mpu_data->accel_gyro_g[5] -= mpu_data->avg_err[5];
+    for (int i = 0; i < 6; ++i)
+    {
+        mpu_data->accel_gyro_raw[i] = mpu_data->accel_gyro_raw[i] - mpu_data->avg_err[i];
+    }
 }

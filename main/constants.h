@@ -34,7 +34,7 @@ static const char *TAG = "I2C Example";
 
 #define FIFO_ENABLE_RESET 0x44 // FIFO enable and reset mask
 
-#define KAMERA 0x33 // Kamera register
+// #define KAMERA 0x33 // Kamera register
 /**
  * @brief MPU FILTER FREQUENCY SETTINGS
  * @attention Uncomment one of the filter frequency settings
@@ -49,12 +49,12 @@ static const char *TAG = "I2C Example";
  *   0x05      10Hz, 13.8ms delay           10Hz, 13.4ms delay
  *   0x06      5Hz, 19ms delay              5Hz, 18.6ms delay
  */
-// #define MPU_FILTER_FREQ_REG_SET_260Hz 0x00 // 260Hz, 0ms delay
+#define MPU_FILTER_FREQ_REG_SET_260Hz 0x00 // 260Hz, 0ms delay
 // #define MPU_FILTER_FREQ_REG_SET_188Hz 0x01 // 188Hz, 1.9ms delay
 // #define MPU_FILTER_FREQ_REG_SET_98Hz 0x02 // 98Hz, 2.8ms delay
 // #define MPU_FILTER_FREQ_REG_SET_42Hz 0x03 // 42Hz, 4.8ms delay
 // #define MPU_FILTER_FREQ_REG_SET_20Hz 0x04 // 20Hz, 8.3ms delay
-#define MPU_FILTER_FREQ_REG_SET_10Hz 0x05 // 10Hz, 13.8ms delay
+// #define MPU_FILTER_FREQ_REG_SET_10Hz 0x05 // 10Hz, 13.8ms delay
 // #define MPU_FILTER_FREQ_REG_SET_5Hz 0x06 // 5Hz, 19ms delay
 // ---------- ifdef blocks for setting the filter frequency
 #ifdef MPU_FILTER_FREQ_REG_SET_260Hz
@@ -94,9 +94,9 @@ static const char *TAG = "I2C Example";
  * - 2 ±8g 4096 LSB/g
  * - 3 ±16g 2048 LSB/g
  */
-// #define MPU_ACCEL_FS_2g 16384 // 2g, 16384 LSB/g
+#define MPU_ACCEL_FS_2g 16384 // 2g, 16384 LSB/g
 // #define MPU_ACCEL_FS_4g 8192 // 4g, 8192 LSB/g
-#define MPU_ACCEL_FS_8g 4096 // 8g, 4096 LSB/g
+// #define MPU_ACCEL_FS_8g 4096 // 8g, 4096 LSB/g
 // #define MPU_ACCEL_FS_16g 2048 // 16g, 2048 LSB/g
 /**
  * ACCEL REGISTER SETTINGS (bit4, bit3)
@@ -142,8 +142,8 @@ static const char *TAG = "I2C Example";
  * 2 ± 1000 °/s 32.8 LSB/°/s
  * 3 ± 2000 °/s 16.4 LSB/°/s
  */
-// #define MPU_GYRO_FS_250deg 131 // 250deg, 131 LSB/°/s
-#define MPU_GYRO_FS_500deg 65.5 // 500deg, 65.5 LSB/°/s
+#define MPU_GYRO_FS_250deg 131 // 250deg, 131 LSB/°/s
+// #define MPU_GYRO_FS_500deg 65.5 // 500deg, 65.5 LSB/°/s
 // #define MPU_GYRO_FS_1000deg 32.8 // 1000deg, 32.8 LSB/°/s
 // #define MPU_GYRO_FS_2000deg 16.4 // 2000deg, 16.4 LSB/°/s
 /**

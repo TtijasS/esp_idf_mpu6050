@@ -17,8 +17,9 @@ void mpu_fifo_reset(i2c_buffer_type *);
 uint16_t *mpu_fifo_count(i2c_buffer_type *);
 bool mpu_fifo_read_extract(i2c_buffer_type *, mpu_data_type *);
 void mpu_fifo_extract_buffer(i2c_buffer_type *, mpu_data_type *);
-void mpu_readings_to_fs(mpu_data_type *);
-bool mpu_readings_avg_err(i2c_buffer_type*, mpu_data_type *, uint16_t repetitions);
-
+void mpu_data_to_fs(mpu_data_type *);
+bool mpu_data_calculate_avg_err(i2c_buffer_type*, mpu_data_type *, uint16_t repetitions);
+void mpu_data_substract_err(mpu_data_type *);
+void mpu_avg_err_divide(mpu_data_type *, uint16_t);
 
 #endif // MPU6050_H
