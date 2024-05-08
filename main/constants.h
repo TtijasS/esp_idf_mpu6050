@@ -49,8 +49,8 @@ static const char *TAG = "I2C Example";
  *   0x05      10Hz, 13.8ms delay           10Hz, 13.4ms delay
  *   0x06      5Hz, 19ms delay              5Hz, 18.6ms delay
  */
-#define MPU_FILTER_FREQ_REG_SET_260Hz 0x00 // 260Hz, 0ms delay
-// #define MPU_FILTER_FREQ_REG_SET_188Hz 0x01 // 188Hz, 1.9ms delay
+// #define MPU_FILTER_FREQ_REG_SET_260Hz 0x00 // 260Hz, 0ms delay
+#define MPU_FILTER_FREQ_REG_SET_188Hz 0x01 // 188Hz, 1.9ms delay
 // #define MPU_FILTER_FREQ_REG_SET_98Hz 0x02 // 98Hz, 2.8ms delay
 // #define MPU_FILTER_FREQ_REG_SET_42Hz 0x03 // 42Hz, 4.8ms delay
 // #define MPU_FILTER_FREQ_REG_SET_20Hz 0x04 // 20Hz, 8.3ms delay

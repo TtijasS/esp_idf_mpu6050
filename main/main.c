@@ -4,8 +4,7 @@
 #include "data_structs.h"
 #include "custom_functions.h"
 
-void print_mpu_data_raw(mpu_data_type *mpu_data);
-void print_mpu_data_avg_err(mpu_data_type *mpu_data);
+void print_avg_errors(mpu_data_type *mpu_data);
 
 void app_main(void)
 {
@@ -26,54 +25,46 @@ void app_main(void)
     mpu_fifo_reset(&i2c_buffer);
 
     ESP_LOGI(TAG, "Calculating average error");
-    mpu_data_calculate_avg_err(&i2c_buffer, &mpu_data, 1000);
-    print_mpu_data_avg_err(&mpu_data);
-    printf("\n");
+    mpu_calibrate(&i2c_buffer, &mpu_data, 40, false);
+    print_avg_errors(&mpu_data);
+
+    // ESP_LOGI(TAG, "Calculating average error with substracting error");
+    // mpu_calibrate(&i2c_buffer, &mpu_data, 20, true);
+    // print_avg_errors(&mpu_data);
+
 
     mpu_fifo_reset(&i2c_buffer);
-    // for (int i = 0; i < 10000; ++i)
-    // {
-    //     // Read the FIFO buffer
-    //     mpu_fifo_read_extract(&i2c_buffer, &mpu_data);
-    //     mpu_data_substract_err(&mpu_data);
-    //     mpu_data_to_fs(&mpu_data);
+    uint16_t print_count = 0;
+    while (1)
+    {
+        print_count++;
+        // Read the FIFO buffer
+        if(mpu_fifo_read_extract(&i2c_buffer, &mpu_data)){
+            // printf("%i; ", mpu_data.accel_gyro_raw[0]);
+            mpu_data_substract_err(&mpu_data);
+            // printf("%i; ", mpu_data.accel_gyro_raw[0]);
+            mpu_data_to_fs(&mpu_data);
+        }
 
-    //     ESP_LOGI(TAG, "%g", mpu_data.accel_gyro_g[0]);
+        if (print_count >= 500){
+            printf("%g\n", mpu_data.accel_gyro_g[0]);
+            mpu_fifo_reset(&i2c_buffer);
+            print_count = 0;
+        }
+        vTaskDelay(20 / portTICK_PERIOD_MS);
+        // vTaskDelay(5 / portTICK_PERIOD_MS);
+    }
 
-    //     vTaskDelay(100 / portTICK_PERIOD_MS); // wait x ms (x10 == 1ms)
-    // }
-    // mpu_fifo_read_extract(&i2c_buffer, &mpu_data);
-    // mpu_data_substract_err(&mpu_data);
-    // mpu_data_to_fs(&mpu_data);
-
-    // ESP_LOGI(TAG, "Testing data");
-    // mpu_fifo_read_extract(&i2c_buffer, &mpu_data);
-    // printf("Raw data: ");
-    // print_mpu_data_raw(&mpu_data);
-    // printf("\n");
-    // printf("Err data:");
-    // print_mpu_data_avg_err(&mpu_data);
 
     ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
 }
 
-void print_mpu_data_raw(mpu_data_type *mpu_data)
+void print_avg_errors(mpu_data_type *mpu_data)
 {
-    for (int i = 0; i < 6; i++)
+    printf("< ");
+    for (int i = 0; i < 5; ++i)
     {
-        printf("%d; ", mpu_data->accel_gyro_raw[i]);
+        printf("%g, ", mpu_data->avg_err[i]);
     }
-}
-
-/**
- * @brief
- *
- * @param mpu_data
- */
-void print_mpu_data_avg_err(mpu_data_type *mpu_data)
-{
-    for (int i = 0; i < 6; i++)
-    {
-        printf("%.2f; ", mpu_data->avg_err[i]);
-    }
+    printf("%g >\n", mpu_data->avg_err[5]);
 }
