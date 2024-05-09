@@ -14,45 +14,45 @@ void mpu_initial_setup(i2c_buffer_type *i2c_buffer)
 {
 
     // Wake up the MPU6050
-    i2c_buffer->write_buffer[0] = MPU_PWR_REG;
-    i2c_buffer->write_buffer[1] = 0x00; // wake up signal
-    mpu_transmit(i2c_buffer, 2);        // write
+    i2c_buffer->write_buffer[0] = MPU_PWR_REG; // Power settings register
+    i2c_buffer->write_buffer[1] = 0x00;        // wake up signal
+    mpu_transmit(i2c_buffer, 2);
 
     // Set filter freq
-    i2c_buffer->write_buffer[0] = MPU_FILTER_FREQ_REG;     // Filter freq register
-    i2c_buffer->write_buffer[1] = MPU_FILTER_FREQ_REG_SET; // Filter freq
+    i2c_buffer->write_buffer[0] = MPU_FILTER_FREQ_REG;  // Filter freq register
+    i2c_buffer->write_buffer[1] = MPU_FILTER_FREQ_MASK; // Filter freq
     mpu_transmit(i2c_buffer, 2);
 
-    // Set accelerometer to +-8g full scale range
+    // Set accelerometer full scale range
     i2c_buffer->write_buffer[0] = MPU_ACCEL_CFG_REG; // Accel register
-    i2c_buffer->write_buffer[1] = MPU_ACCEL_REG_SET; //  Accel register setting
+    i2c_buffer->write_buffer[1] = MPU_ACCEL_FS_MASK; //  Accel register setting
     mpu_transmit(i2c_buffer, 2);
 
-    // Set gyroscope to +-1000 deg/s full scale range
+    // Set gyroscope full scale range
     i2c_buffer->write_buffer[0] = MPU_GYRO_CFG_REG; // Gyro register
-    i2c_buffer->write_buffer[1] = MPU_GYRO_REG_SET; // Gyro register setting
+    i2c_buffer->write_buffer[1] = MPU_GYRO_FS_MASK; // Gyro register setting
     mpu_transmit(i2c_buffer, 2);
 
     // Set what data is stored in the FIFO buffer
-    i2c_buffer->write_buffer[0] = MPU_FIFO_ENBL_MASK_REG;  // Fifo enable register
-    i2c_buffer->write_buffer[1] = MPU_FIFO_ENABLE_REG_SET; // Fifo enable gyro and accel data setting
+    i2c_buffer->write_buffer[0] = MPU_FIFO_EN_REG;     // Fifo enable register
+    i2c_buffer->write_buffer[1] = MPU_FIFO_EN_MASK; // Fifo enable gyro and accel data setting
     mpu_transmit(i2c_buffer, 2);
 
-    // Check the integrity of the configured registers
-    i2c_buffer->write_buffer[0] = MPU_PWR_REG;
-    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x00h (0d)
+    // // Check the integrity of the configured registers
+    // i2c_buffer->write_buffer[0] = MPU_PWR_REG;
+    // mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x00h (0d)
 
-    i2c_buffer->write_buffer[0] = MPU_FILTER_FREQ_REG;
-    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x06h (6d)
+    // i2c_buffer->write_buffer[0] = MPU_FILTER_FREQ_REG;
+    // mpu_transmit_receive(i2c_buffer, 1, 1); // Should equal to MPU_FILTER_FREQ_MASK
 
-    i2c_buffer->write_buffer[0] = MPU_ACCEL_CFG_REG;
-    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x10h (16d)
+    // i2c_buffer->write_buffer[0] = MPU_ACCEL_CFG_REG;
+    // mpu_transmit_receive(i2c_buffer, 1, 1); // Should equal to MPU_ACCEL_FS_MASK
 
-    i2c_buffer->write_buffer[0] = MPU_GYRO_CFG_REG;
-    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x10h (16d)
+    // i2c_buffer->write_buffer[0] = MPU_GYRO_CFG_REG;
+    // mpu_transmit_receive(i2c_buffer, 1, 1); // Should equal to MPU_GYRO_FS_MASK
 
-    i2c_buffer->write_buffer[0] = MPU_FIFO_ENBL_MASK_REG;
-    mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x78h (120d)
+    // i2c_buffer->write_buffer[0] = MPU_FIFO_EN_REG;
+    // mpu_transmit_receive(i2c_buffer, 1, 1); // Should equal to MPU_FIFO_EN_MASK
 }
 
 /**
@@ -123,7 +123,7 @@ void mpu_transmit(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size)
  */
 void mpu_fifo_enable(i2c_buffer_type *i2c_buffer)
 {
-    i2c_buffer->write_buffer[0] = MPU_FIFO_CTRL_REG;
+    i2c_buffer->write_buffer[0] = MPU_USER_CTRL_REG;
     i2c_buffer->write_buffer[1] = 0x40; // Enable FIFO
     mpu_transmit(i2c_buffer, 2);
 }
@@ -138,8 +138,8 @@ void mpu_fifo_reset(i2c_buffer_type *i2c_buffer)
 {
     // Fifo reset bit = 0x04 and fifo enable bit = 0x40
     // Therefore reset and enable FIFO = 0x44
-    i2c_buffer->write_buffer[0] = MPU_FIFO_CTRL_REG;
-    i2c_buffer->write_buffer[1] = 0x44;
+    i2c_buffer->write_buffer[0] = MPU_USER_CTRL_REG;
+    i2c_buffer->write_buffer[1] = MPU_FIFO_RESET_MASK;
     mpu_transmit(i2c_buffer, 2);
 }
 
@@ -270,9 +270,11 @@ bool mpu_calibrate(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint8_t
     // cycles * 100 readings are used for calibration
     for (int cycle = 1; cycle <= cycles; ++cycle)
     {
-        vTaskDelay(20 / portTICK_PERIOD_MS); // wait for watchdog reasons
-        ESP_LOGI(TAG, "Calibrating cycle %d", cycle);
-    
+        if (cycle % 5 == 0)
+        {
+            vTaskDelay(20 / portTICK_PERIOD_MS); // wait for watchdog reasons
+            ESP_LOGI(TAG, "Calibration cycle %d (%d readings)", cycle, cycle * 100);
+        }
         for (int readings = 0; readings < 100; ++readings)
         {
             // Read extract FIFO and check if it was successful
@@ -301,7 +303,7 @@ bool mpu_calibrate(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint8_t
             mpu_data->avg_err[i] = avg_errors[i];
     }
 
-    ESP_LOGI(TAG, "Calibration finished");
+    ESP_LOGI(TAG, "Calibration finished with %d cycles (%d readings)", cycles, cycles * 100);
     return true;
 }
 

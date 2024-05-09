@@ -25,36 +25,40 @@ void app_main(void)
     mpu_fifo_reset(&i2c_buffer);
 
     ESP_LOGI(TAG, "Calculating average error");
-    mpu_calibrate(&i2c_buffer, &mpu_data, 40, false);
+    mpu_calibrate(&i2c_buffer, &mpu_data, 10, false);
+
+    printf("Calibration done with calibration numbers:\n");
     print_avg_errors(&mpu_data);
+
+    printf("Starting main loop in 5s\n");
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
 
     // ESP_LOGI(TAG, "Calculating average error with substracting error");
     // mpu_calibrate(&i2c_buffer, &mpu_data, 20, true);
-    // print_avg_errors(&mpu_data);
-
 
     mpu_fifo_reset(&i2c_buffer);
-    uint16_t print_count = 0;
     while (1)
     {
-        print_count++;
+        i2c_buffer.write_buffer[0] = MPU_GYRO_X_H_REG;
+        mpu_transmit_receive(&i2c_buffer, 1, 6);
+        int16_t gx, gy, gz = 0;
+        gx = (i2c_buffer.read_buffer[0] << 8) | i2c_buffer.read_buffer[1];
+        // gy = (i2c_buffer.read_buffer[2] << 8) | i2c_buffer.read_buffer[3];
+        // gz = (i2c_buffer.read_buffer[4] << 8) | i2c_buffer.read_buffer[5];
+        printf("%d; ", gx);
+    
         // Read the FIFO buffer
-        if(mpu_fifo_read_extract(&i2c_buffer, &mpu_data)){
+        if (mpu_fifo_read_extract(&i2c_buffer, &mpu_data))
+        {
             // printf("%i; ", mpu_data.accel_gyro_raw[0]);
-            mpu_data_substract_err(&mpu_data);
+            // mpu_data_substract_err(&mpu_data);
             // printf("%i; ", mpu_data.accel_gyro_raw[0]);
-            mpu_data_to_fs(&mpu_data);
+            // mpu_data_to_fs(&mpu_data);
         }
-
-        if (print_count >= 500){
-            printf("%g\n", mpu_data.accel_gyro_g[0]);
-            mpu_fifo_reset(&i2c_buffer);
-            print_count = 0;
-        }
-        vTaskDelay(20 / portTICK_PERIOD_MS);
-        // vTaskDelay(5 / portTICK_PERIOD_MS);
+        printf("; %d\n", mpu_data.accel_gyro_raw[0]);
+        mpu_fifo_reset(&i2c_buffer);
+        vTaskDelay(50 / portTICK_PERIOD_MS);
     }
-
 
     ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
 }
