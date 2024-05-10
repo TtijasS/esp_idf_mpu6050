@@ -33,9 +33,10 @@ static const char *TAG = "I2C Example";
 #define MPU_GYRO_X_H_REG 0x43	  // Reg adr - gyro X-axis data high byte register (MSB)
 #define MPU_FIFO_COUNT_H_REG 0x72 // Reg adr - FIFO count MSB byte
 #define MPU_FIFO_COUNT_L_REG 0x73 // Reg adr - FIFO count LSB byte
+#define MPU_FIFO_OVERFLOW 0x3A		  // Reg adr - FIFO overflow register
 
 // MPU SETTING MASKS
-#define MPU_FIFO_EN_MASK 0x40	 // Reg mask - use with MPU_FIFO_EN_REG; Enable gyro and acel in FIFO)
+#define MPU_FIFO_EN_MASK 0x78	 // Reg mask - use with MPU_FIFO_EN_REG; Enable gyro and acel in FIFO)
 #define MPU_FIFO_RESET_MASK 0x44 // Reg mask - use with MPU_USER_CTRL_REG; Reset FIFO and keep it enabled: 0x04 - fifo reset; 0x40 - fifo enable)
 
 /**

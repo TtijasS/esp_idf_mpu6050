@@ -144,21 +144,44 @@ void mpu_fifo_reset(i2c_buffer_type *i2c_buffer)
 }
 
 /**
- * @brief Read FIFO count register and return pointer to the value
+ * @brief Read FIFO count register and return the value
  *
  * Functions is usefull when we need to check if the FIFO buffer is filled with enough bytes
  *
  * @param i2c_buffer: struct with read_buffer, write_buffer
- * @return &fifo_count: pointer to the FIFO count value
+ * @return fifo_count: uint16_t value
  */
-uint16_t *mpu_fifo_count(i2c_buffer_type *i2c_buffer)
+uint16_t mpu_fifo_count(i2c_buffer_type *i2c_buffer)
 {
     static uint16_t fifo_count;
+    // Read MSB
     i2c_buffer->write_buffer[0] = MPU_FIFO_COUNT_H_REG;
-    mpu_transmit_receive(i2c_buffer, 1, 2);
+    mpu_transmit_receive(i2c_buffer, 1, 1);
+    fifo_count = (i2c_buffer->read_buffer[0] << 8);
+    // Read LSB
+    i2c_buffer->write_buffer[0] = MPU_FIFO_COUNT_L_REG;
+    mpu_transmit_receive(i2c_buffer, 1, 1);
+    fifo_count |= i2c_buffer->read_buffer[0];
+    
+    return 0;
+}
 
-    fifo_count = (i2c_buffer->read_buffer[0] << 8) | i2c_buffer->read_buffer[1];
-    return &fifo_count;
+/**
+ * @brief Check if FIFO buffer has overflowed
+ * 
+ * @param i2c_buffer struct with write_buffer, read_buffer
+ * @return true 
+ * @return false 
+ */
+bool mpu_fifo_overflow_check(i2c_buffer_type *i2c_buffer)
+{
+    i2c_buffer->write_buffer[0] = MPU_FIFO_OVERFLOW;
+    mpu_transmit_receive(i2c_buffer, 1, 1);
+    if (i2c_buffer->read_buffer[0] & 0x10) // check if fifo overflow bit is 1
+    {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -179,15 +202,22 @@ bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
         ESP_LOGI(TAG, "The allocated i2c_buffer.read_buffer size is smaller than 12");
         return false;
     }
-    uint16_t *fifo_count = mpu_fifo_count(i2c_buffer);
-    if (*fifo_count >= 12)
+    for (int i = 0; i < 20; ++i)
     {
-        i2c_buffer->write_buffer[0] = MPU_FIFO_DATA_REG;
-        mpu_transmit_receive(i2c_buffer, 1, 12);
+        uint16_t fifo_count = mpu_fifo_count(i2c_buffer);
+        if (mpu_fifo_count(i2c_buffer) % 12 == 0)
+        {
+            ESP_LOGI(TAG, "FIFO count: %d", fifo_count);
+            i2c_buffer->write_buffer[0] = MPU_FIFO_DATA_REG;
+            mpu_transmit_receive(i2c_buffer, 1, 12);
+            mpu_fifo_extract_buffer(i2c_buffer, mpu_data);
+            return true;
+        }else
+        {
+            mpu_fifo_reset(i2c_buffer);
+        }
     }
-
-    mpu_fifo_extract_buffer(i2c_buffer, mpu_data);
-    return true;
+    return false;
 }
 
 /**
@@ -199,11 +229,11 @@ bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
  */
 void mpu_fifo_extract_buffer(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
 {
-    int j = 0;
+    int msb = 0;
     for (int i = 0; i < 6; ++i)
     {
-        j = i * 2;
-        mpu_data->accel_gyro_raw[i] = (i2c_buffer->read_buffer[j] << 8) | i2c_buffer->read_buffer[j + 1];
+        msb = i * 2;
+        mpu_data->accel_gyro_raw[i] = (i2c_buffer->read_buffer[msb] << 8) | i2c_buffer->read_buffer[msb + 1];
     }
 }
 
