@@ -34,7 +34,7 @@ void mpu_initial_setup(i2c_buffer_type *i2c_buffer)
     mpu_transmit(i2c_buffer, 2);
 
     // Set what data is stored in the FIFO buffer
-    i2c_buffer->write_buffer[0] = MPU_FIFO_EN_REG;     // Fifo enable register
+    i2c_buffer->write_buffer[0] = MPU_FIFO_EN_REG;  // Fifo enable register
     i2c_buffer->write_buffer[1] = MPU_FIFO_EN_MASK; // Fifo enable gyro and accel data setting
     mpu_transmit(i2c_buffer, 2);
 
@@ -162,16 +162,16 @@ uint16_t mpu_fifo_count(i2c_buffer_type *i2c_buffer)
     i2c_buffer->write_buffer[0] = MPU_FIFO_COUNT_L_REG;
     mpu_transmit_receive(i2c_buffer, 1, 1);
     fifo_count |= i2c_buffer->read_buffer[0];
-    
-    return 0;
+
+    return fifo_count;
 }
 
 /**
  * @brief Check if FIFO buffer has overflowed
- * 
+ *
  * @param i2c_buffer struct with write_buffer, read_buffer
- * @return true 
- * @return false 
+ * @return true
+ * @return false
  */
 bool mpu_fifo_overflow_check(i2c_buffer_type *i2c_buffer)
 {
@@ -202,22 +202,112 @@ bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
         ESP_LOGI(TAG, "The allocated i2c_buffer.read_buffer size is smaller than 12");
         return false;
     }
-    for (int i = 0; i < 20; ++i)
+    mpu_fifo_reset(i2c_buffer);
+    for (int i = 0; i < 10; ++i)
     {
         uint16_t fifo_count = mpu_fifo_count(i2c_buffer);
-        if (mpu_fifo_count(i2c_buffer) % 12 == 0)
+        ESP_LOGI(TAG, "(%d) FIFO count: %d", i, fifo_count);
+        if (fifo_count % 12 != 0)
+            mpu_fifo_reset(i2c_buffer);
+        if (fifo_count >= 12 && fifo_count % 12 == 0)
         {
-            ESP_LOGI(TAG, "FIFO count: %d", fifo_count);
+            ESP_LOGI(TAG, "(%d) FIFO %% 12 == 0 (%d -> %d)", i, fifo_count, fifo_count % 12);
             i2c_buffer->write_buffer[0] = MPU_FIFO_DATA_REG;
             mpu_transmit_receive(i2c_buffer, 1, 12);
             mpu_fifo_extract_buffer(i2c_buffer, mpu_data);
             return true;
-        }else
-        {
-            mpu_fifo_reset(i2c_buffer);
         }
     }
     return false;
+}
+
+bool mpu_data_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
+{
+    if (I2C_READ_BUFF_SIZE < 14)
+    {
+        ESP_LOGI(TAG, "The allocated i2c_buffer.read_buffer size is smaller than 14");
+        return false;
+    }
+    i2c_buffer->write_buffer[0] = MPU_ACCEL_X_H_REG;
+    mpu_transmit_receive(i2c_buffer, 1, 14);
+    mpu_data->accel_gyro_raw[0] = (i2c_buffer->read_buffer[0] << 8) | i2c_buffer->read_buffer[1];
+    mpu_data->accel_gyro_raw[1] = (i2c_buffer->read_buffer[2] << 8) | i2c_buffer->read_buffer[3];
+    mpu_data->accel_gyro_raw[2] = (i2c_buffer->read_buffer[4] << 8) | i2c_buffer->read_buffer[5];
+    mpu_data->accel_gyro_raw[3] = (i2c_buffer->read_buffer[8] << 8) | i2c_buffer->read_buffer[9];
+    mpu_data->accel_gyro_raw[4] = (i2c_buffer->read_buffer[10] << 8) | i2c_buffer->read_buffer[11];
+    mpu_data->accel_gyro_raw[5] = (i2c_buffer->read_buffer[12] << 8) | i2c_buffer->read_buffer[13];
+    return true;
+}
+
+/**
+ * @brief Used for reading and averaging out the raw reading into a mpu_data.avg_err array
+ *
+ * The function simply adds the mpu_data.accel_gyro_raw array to the mpu_data.avg_err array.
+ * If average_out is set to true, the result is divided by 2.
+ *
+ * @param i2c_buffer: struct with read_buffer, write_buffer
+ * @param mpu_data: struct with accel_gyro_raw, avg_err
+ * @param average_out: true if you want to average out the values (a_0+b_0)/2
+ * @return true if successful
+ */
+bool mpu_data_sum_error(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, bool average_out)
+{
+    if (sizeof(mpu_data->accel_gyro_raw) < 6 || sizeof(mpu_data->avg_err) < 6)
+    {
+        ESP_LOGI(TAG, "The allocated mpu_data.accel_gyro_raw or mpu_data.avg_err size is smaller than 6");
+        return false;
+    }
+    if (!average_out)
+        mpu_data_reset(mpu_data);
+
+    for (int i = 0; i < 6; ++i)
+    {
+        mpu_data->avg_err[i] += mpu_data->accel_gyro_raw[i];
+        if (average_out)
+            mpu_data->avg_err[i] /= 2;
+
+    }
+    return true;
+}
+
+/**
+ * @brief Calibrate the MPU6050 sensor
+ *
+ * The function reads the accel and gyro data straight from the accel and gyro registers and averages out the errors.
+ * Error values are store into the mpu_data.avg_err array.
+ *
+ * @param i2c_buffer: struct with read_buffer, write_buffer
+ * @param mpu_data: struct with accel_gyro_raw, avg_err
+ * @param cycles: number of cycles to average out the errors (cycles * 100 readings)
+ * @return true
+ * @return false
+ */
+bool mpu_data_calibrate(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint8_t cycles)
+{
+
+    // First data reading
+    if (!mpu_data_read_extract(i2c_buffer, mpu_data) || ! mpu_data_sum_error(i2c_buffer, mpu_data, false))
+    {
+        ESP_LOGI(TAG, "Failed to read and sum the first data reading");
+        return false;
+    }
+    mpu_data_sum_error(i2c_buffer, mpu_data, false);
+
+    // Start averaging out the errors
+    for (int cycle = 0; cycle < cycles; ++cycle)
+    {
+        for (int reading = 0; reading < 100; ++reading)
+        {
+            mpu_data_read_extract(i2c_buffer, mpu_data);
+            mpu_data_sum_error(i2c_buffer, mpu_data, true);
+        }
+        if (cycle % 5 == 0)
+        {
+            ESP_LOGI(TAG, "Calibration cycle %d (%d readings)", cycle, cycle * 100);
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
+    }
+    return true;
 }
 
 /**

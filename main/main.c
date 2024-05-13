@@ -15,13 +15,16 @@ void app_main(void)
     mpu_initial_setup(&i2c_buffer);
 
     // Enable the FIFO buffer (otherwise the data is not stored in the MPU FIFO)
-    mpu_fifo_enable(&i2c_buffer);
+    // mpu_fifo_enable(&i2c_buffer);
 
-    // ESP_LOGI(TAG, "Calculating average error");
+    ESP_LOGI(TAG, "Calibrating");
+    mpu_data_calibrate(&i2c_buffer, &mpu_data, 10); // 4*500 readings
+
+    printf("Calibration done with calibration numbers:\n");
+    print_avg_errors(&mpu_data);
+
     // mpu_calibrate(&i2c_buffer, &mpu_data, 10, false);
 
-    // printf("Calibration done with calibration numbers:\n");
-    // print_avg_errors(&mpu_data);
 
     // printf("Starting main loop in 5s\n");
     // vTaskDelay(5000 / portTICK_PERIOD_MS);
@@ -32,8 +35,10 @@ void app_main(void)
     // mpu_fifo_reset(&i2c_buffer);
     while (1)
     {
-        mpu_fifo_read_extract(&i2c_buffer, &mpu_data);
-        printf("%d;\n", mpu_data.accel_gyro_raw[1]);
+        // mpu_fifo_read_extract(&i2c_buffer, &mpu_data);
+        mpu_data_read_extract(&i2c_buffer, &mpu_data);
+        mpu_data_substract_err(&mpu_data);
+        printf("%d; %d; %d; %d; %d; %d\n", mpu_data.accel_gyro_raw[0], mpu_data.accel_gyro_raw[1], mpu_data.accel_gyro_raw[2], mpu_data.accel_gyro_raw[3], mpu_data.accel_gyro_raw[4], mpu_data.accel_gyro_raw[5]);
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
     ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
