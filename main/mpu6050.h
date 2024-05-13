@@ -28,5 +28,4 @@ bool mpu_data_sum_error(i2c_buffer_type *, mpu_data_type *, bool);
 bool mpu_data_calibrate(i2c_buffer_type *, mpu_data_type *, uint8_t);
 void mpu_data_reset(mpu_data_type *);
 
-
 #endif // MPU6050_H

@@ -1,6 +1,6 @@
 #include "constants.h"
 #include "mpu6050.h"
-#include "my_i2c_config.h"
+#include "my_i2c_config.h"it
 #include "data_structs.h"
 #include "custom_functions.h"
 
@@ -18,13 +18,12 @@ void app_main(void)
     // mpu_fifo_enable(&i2c_buffer);
 
     ESP_LOGI(TAG, "Calibrating");
-    mpu_data_calibrate(&i2c_buffer, &mpu_data, 10); // 4*500 readings
+    mpu_data_calibrate(&i2c_buffer, &mpu_data, 20); // n*100 readings
 
     printf("Calibration done with calibration numbers:\n");
     print_avg_errors(&mpu_data);
 
     // mpu_calibrate(&i2c_buffer, &mpu_data, 10, false);
-
 
     // printf("Starting main loop in 5s\n");
     // vTaskDelay(5000 / portTICK_PERIOD_MS);
@@ -36,9 +35,18 @@ void app_main(void)
     while (1)
     {
         // mpu_fifo_read_extract(&i2c_buffer, &mpu_data);
-        mpu_data_read_extract(&i2c_buffer, &mpu_data);
+        // mpu_data_read_extract(&i2c_buffer, &mpu_data);
         mpu_data_substract_err(&mpu_data);
-        printf("%d; %d; %d; %d; %d; %d\n", mpu_data.accel_gyro_raw[0], mpu_data.accel_gyro_raw[1], mpu_data.accel_gyro_raw[2], mpu_data.accel_gyro_raw[3], mpu_data.accel_gyro_raw[4], mpu_data.accel_gyro_raw[5]);
+        mpu_data_to_fs(&mpu_data);
+        printf("%.1f; %.1f; %.1f\n", mpu_data.accel_gyro_g[0], mpu_data.accel_gyro_g[1], mpu_data.accel_gyro_g[2]);
+        // printf("%.2f; %.2f; %.2f\n", mpu_data.accel_gyro_g[3], mpu_data.accel_gyro_g[4], mpu_data.accel_gyro_g[5]);
+        // printf("%.3f;\n", mpu_data.accel_gyro_g[0]);
+        // printf("%.3f;\n", mpu_data.accel_gyro_g[1]);
+        // printf("%.3f;\n", mpu_data.accel_gyro_g[2]);
+        // printf("%.3f;\n", mpu_data.accel_gyro_g[3]);
+        // printf("%.3f;\n", mpu_data.accel_gyro_g[4]);
+        // printf("%.3f;\n", mpu_data.accel_gyro_g[5]);
+        // printf("%d; %d; %d; %d; %d; %d\n", mpu_data.accel_gyro_raw[0], mpu_data.accel_gyro_raw[1], mpu_data.accel_gyro_raw[2], mpu_data.accel_gyro_raw[3], mpu_data.accel_gyro_raw[4], mpu_data.accel_gyro_raw[5]);
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
     ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));

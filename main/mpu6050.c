@@ -286,12 +286,16 @@ bool mpu_data_calibrate(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, ui
 {
 
     // First data reading
-    if (!mpu_data_read_extract(i2c_buffer, mpu_data) || ! mpu_data_sum_error(i2c_buffer, mpu_data, false))
+    if (!mpu_data_read_extract(i2c_buffer, mpu_data))
     {
-        ESP_LOGI(TAG, "Failed to read and sum the first data reading");
+        ESP_LOGI(TAG, "Failed to read FIFO buffer. Aborting calibration");
         return false;
     }
-    mpu_data_sum_error(i2c_buffer, mpu_data, false);
+    if (!mpu_data_sum_error(i2c_buffer, mpu_data, false))
+    {
+        ESP_LOGI(TAG, "Failed to sum the errors. Aborting calibration");
+        return false;
+    }
 
     // Start averaging out the errors
     for (int cycle = 0; cycle < cycles; ++cycle)
@@ -307,6 +311,7 @@ bool mpu_data_calibrate(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, ui
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
     }
+    ESP_LOGI(TAG, "Calibration finished with %d cycles (%d readings)", cycles, cycles * 100);
     return true;
 }
 
@@ -441,7 +446,7 @@ bool mpu_calibrate(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint8_t
  * @param average_out average the readings_array values
  * @return double*
  */
-double *mpu_fifo_read_to_array(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, double *readings_array, uint8_t array_size, bool substract_err, bool average_out)
+double *mpu_fifo_read_to_array(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, double *readings_array, uint8_t array_size, bool subtract_err, bool average_out)
 {
     if (array_size < 6)
     {
@@ -459,7 +464,7 @@ double *mpu_fifo_read_to_array(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_d
     if (mpu_fifo_read_extract(i2c_buffer, mpu_data))
     {
         // Subtract average error from the raw data (useful if the error was calculated before)
-        if (substract_err)
+        if (subtract_err)
             mpu_data_substract_err(mpu_data);
 
         // Sum the raw data to the readings_array
@@ -509,7 +514,7 @@ void mpu_data_substract_err(mpu_data_type *mpu_data)
 {
     for (int i = 0; i < 6; ++i)
     {
-        int32_t temp = (int32_t)mpu_data->accel_gyro_raw[i] - (int32_t)mpu_data->avg_err[i];
+        double temp = (double)mpu_data->accel_gyro_raw[i] - mpu_data->avg_err[i];
         // if temp is larger than max int16_t value, set it to max int16_t value or smaller than min int16_t value, set it to min int16_t value
         if (temp > INT16_MAX)
             mpu_data->accel_gyro_raw[i] = INT16_MAX;
