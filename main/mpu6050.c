@@ -206,7 +206,7 @@ bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
     for (int i = 0; i < 10; ++i)
     {
         uint16_t fifo_count = mpu_fifo_count(i2c_buffer);
-        ESP_LOGI(TAG, "(%d) FIFO count: %d", i, fifo_count);
+        // ESP_LOGI(TAG, "(%d) FIFO count: %d", i, fifo_count);
         if (fifo_count % 12 != 0)
             mpu_fifo_reset(i2c_buffer);
         if (fifo_count >= 12 && fifo_count % 12 == 0)
