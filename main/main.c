@@ -34,25 +34,12 @@ void init_uart()
     ESP_ERROR_CHECK(uart_driver_install(uart_num, uart_buffer_size, uart_buffer_size, 10, NULL, 0));
 }
 
-void send_float_over_uart(float value)
+void send_accel_data_over_uart(mpu_data_type *mpu_data)
 {
-    uint8_t data[sizeof(float)];
-    memcpy(data, &value, sizeof(float));
-    uart_write_bytes(uart_num, (const char *)data, sizeof(float));
-}
-
-void send_accel_data_over_uart(float value1, float value2, float value3)
-{
-    // Send first float
-    send_float_over_uart(value1);
-
-    // Send second float
-    send_float_over_uart(value2);
-
-    // Send third float
-    send_float_over_uart(value3);
-    // Send newline
-    uart_write_bytes(uart_num, "\n\r", 2);
+    uint8_t data[sizeof(float) * 3];
+    memcpy(data, &mpu_data->accel_gyro_g[3], sizeof(float) * 3);
+    uart_write_bytes(uart_num, (const char *)data, sizeof(float) * 3);
+    uart_write_bytes(uart_num, "\t", 1);
 }
 
 void app_main(void)
@@ -71,9 +58,9 @@ void app_main(void)
         mpu_data_to_fs(&mpu_data);
 
         // Send the three floats over UART
-        send_accel_data_over_uart(mpu_data.accel_gyro_g[3], mpu_data.accel_gyro_g[4], mpu_data.accel_gyro_g[5]);
+        send_accel_data_over_uart(&mpu_data);
 
-        vTaskDelay(pdMS_TO_TICKS(1));
+        // vTaskDelay(pdMS_TO_TICKS(1));  // Adjust delay as needed
     }
     
     ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));

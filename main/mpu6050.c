@@ -358,12 +358,12 @@ void mpu_data_reset(mpu_data_type *mpu_data)
  */
 void mpu_data_to_fs(mpu_data_type *mpu_data)
 {
-    mpu_data->accel_gyro_g[0] = (double)mpu_data->accel_gyro_raw[0] / MPU_ACCEL_FS; //  - mpu_data->avg_err[0]
-    mpu_data->accel_gyro_g[1] = (double)mpu_data->accel_gyro_raw[1] / MPU_ACCEL_FS; //  - mpu_data->avg_err[1]
-    mpu_data->accel_gyro_g[2] = (double)mpu_data->accel_gyro_raw[2] / MPU_ACCEL_FS; //  - mpu_data->avg_err[2]
-    mpu_data->accel_gyro_g[3] = (double)mpu_data->accel_gyro_raw[3] / MPU_GYRO_FS;  //  - mpu_data->avg_err[3]
-    mpu_data->accel_gyro_g[4] = (double)mpu_data->accel_gyro_raw[4] / MPU_GYRO_FS;  //  - mpu_data->avg_err[4]
-    mpu_data->accel_gyro_g[5] = (double)mpu_data->accel_gyro_raw[5] / MPU_GYRO_FS;  //  - mpu_data->avg_err[5]
+    mpu_data->accel_gyro_g[0] = (float)mpu_data->accel_gyro_raw[0] / MPU_ACCEL_FS; //  - mpu_data->avg_err[0]
+    mpu_data->accel_gyro_g[1] = (float)mpu_data->accel_gyro_raw[1] / MPU_ACCEL_FS; //  - mpu_data->avg_err[1]
+    mpu_data->accel_gyro_g[2] = (float)mpu_data->accel_gyro_raw[2] / MPU_ACCEL_FS; //  - mpu_data->avg_err[2]
+    mpu_data->accel_gyro_g[3] = (float)mpu_data->accel_gyro_raw[3] / MPU_GYRO_FS;  //  - mpu_data->avg_err[3]
+    mpu_data->accel_gyro_g[4] = (float)mpu_data->accel_gyro_raw[4] / MPU_GYRO_FS;  //  - mpu_data->avg_err[4]
+    mpu_data->accel_gyro_g[5] = (float)mpu_data->accel_gyro_raw[5] / MPU_GYRO_FS;  //  - mpu_data->avg_err[5]
 }
 
 /**
@@ -376,7 +376,7 @@ void mpu_data_to_fs(mpu_data_type *mpu_data)
  */
 bool mpu_calibrate(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint8_t cycles, bool substract_err)
 {
-    double avg_errors[6] = {0};
+    float avg_errors[6] = {0};
     for (int i = 0; i < 10; ++i)
     {
         if (i == 10)
@@ -444,9 +444,9 @@ bool mpu_calibrate(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, uint8_t
  * @param array_size size of the readings_array (must be at least 6)
  * @param substract_err substract the average error from the raw data
  * @param average_out average the readings_array values
- * @return double*
+ * @return float*
  */
-double *mpu_fifo_read_to_array(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, double *readings_array, uint8_t array_size, bool subtract_err, bool average_out)
+float *mpu_fifo_read_to_array(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, float *readings_array, uint8_t array_size, bool subtract_err, bool average_out)
 {
     if (array_size < 6)
     {
@@ -514,7 +514,7 @@ void mpu_data_substract_err(mpu_data_type *mpu_data)
 {
     for (int i = 0; i < 6; ++i)
     {
-        double temp = (double)mpu_data->accel_gyro_raw[i] - mpu_data->avg_err[i];
+        float temp = (float)mpu_data->accel_gyro_raw[i] - mpu_data->avg_err[i];
         // if temp is larger than max int16_t value, set it to max int16_t value or smaller than min int16_t value, set it to min int16_t value
         if (temp > INT16_MAX)
             mpu_data->accel_gyro_raw[i] = INT16_MAX;

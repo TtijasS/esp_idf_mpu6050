@@ -16,10 +16,10 @@ typedef struct mpu_data_type
     int16_t accel_gyro_raw[6];
 
     // accel_x_er, accel_y_err, accel_z_err, gyro_x_err, gyro_y_err, gyro_z_err
-    double avg_err[6];
+    float avg_err[6];
 
     // accel_x_g, accel_y_g, accel_z_g, gyro_x_g, gyro_y_g, gyro_z_g
-    double accel_gyro_g[6];
+    float accel_gyro_g[6];
 } mpu_data_type;
 
 /**
