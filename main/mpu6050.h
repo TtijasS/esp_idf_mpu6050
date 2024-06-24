@@ -4,7 +4,7 @@
 #include <driver/i2c_master.h>
 #include <freertos/FreeRTOS.h>
 #include "constants.h"
-#include "my_i2c_config.h"
+#include "my_i2c_com.h"
 #include "data_structs.h"
 #include <esp_log.h>
 

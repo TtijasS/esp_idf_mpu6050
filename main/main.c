@@ -1,67 +1,65 @@
-#include <string.h> // Include string.h for memcpy
-#include <stdio.h> // Include stdio.h for standard input/output functions
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h> // Include FreeRTOS task header
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+// #include "esp_system.h"
 #include "driver/uart.h"
+#include "esp_log.h"
 #include "constants.h"
 #include "mpu6050.h"
-#include "my_i2c_config.h"
+#include "my_i2c_com.h"
 #include "data_structs.h"
 #include "custom_functions.h"
-#include "driver/uart.h"
-#include <string.h>
+#include "my_uart_com.h"
+#include "my_fft.h"
 
-const uart_port_t uart_num = UART_NUM_0;
-const int uart_buffer_size = (1024 * sizeof(float));
+// __attribute__((aligned(16))) float data_sampled[3][N_SAMPLES];   // Sampled data; x, y, z axes
+__attribute__((aligned(16))) float data_sampled[N_SAMPLES];   // Sampled data; x, y, z axes
 
-void init_uart()
-{
-    // Configure UART parameters
-    uart_config_t uart_config = {
-        .baud_rate = 3000000, // You can change this to your required baud rate
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
-    };
-
-    ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
-
-    // Set UART pins (TX: GPIO43, RX: GPIO44, RTS: unused, CTS: unused)
-    ESP_ERROR_CHECK(uart_set_pin(uart_num, 43, 44, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-
-    // Install UART driver using an event queue here
-    ESP_ERROR_CHECK(uart_driver_install(uart_num, uart_buffer_size, uart_buffer_size, 10, NULL, 0));
-}
-
-void send_accel_data_over_uart(mpu_data_type *mpu_data)
-{
-    uint8_t data[sizeof(float) * 3];
-    memcpy(data, &mpu_data->accel_gyro_g[3], sizeof(float) * 3);
-    uart_write_bytes(uart_num, (const char *)data, sizeof(float) * 3);
-    uart_write_bytes(uart_num, "\t", 1);
-}
 
 void app_main(void)
 {
-    // Setup master handles and initialize I2C
-    init_i2c();
-    init_uart();
+    ESP_LOGI(TAG, "Start Example.");
+
+    // Init I2C settings
+    i2c_init();
+    // Init custom UART settings (commented out to check FFT outputs)
+    uart_init();
+    // Initialize FFT
+    fft_init();
 
     // Setup the MPU6050 registers
     mpu_initial_setup(&i2c_buffer);
 
+    int i = 0;
     while (1)
     {
+        // Read and process MPU6050 data
         mpu_data_read_extract(&i2c_buffer, &mpu_data);
         mpu_data_substract_err(&mpu_data);
         mpu_data_to_fs(&mpu_data);
 
-        // Send the three floats over UART
-        send_accel_data_over_uart(&mpu_data);
+        // Copy data to respective axis arrays
+        memcpy(&data_sampled[i], &mpu_data.accel_gyro_g[3], sizeof(float)); // X-axis
+        // memcpy(&data_sampled[0][i], &mpu_data.accel_gyro_g[3], sizeof(float)); // X-axis
+        // memcpy(&data_sampled[1][i], &mpu_data.accel_gyro_g[4], sizeof(float)); // Y-axis
+        // memcpy(&data_sampled[2][i], &mpu_data.accel_gyro_g[5], sizeof(float)); // Z-axis
 
-        // vTaskDelay(pdMS_TO_TICKS(1));  // Adjust delay as needed
+
+        i++;
+        if (i == N_SAMPLES)
+        {
+            fft_run_with_hann(data_sampled, N_SAMPLES);
+            i = 0;
+        }
+
+        // Use the configured UART settings to send accelerometer data
+        // uart_send_accel_data(&mpu_data);
+
+        // Adjust delay as needed
+        // vTaskDelay(pdMS_TO_TICKS(1));
     }
-    
+
     ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
 }

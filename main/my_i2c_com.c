@@ -1,5 +1,5 @@
 // i2c_config.c
-#include "my_i2c_config.h"
+#include "my_i2c_com.h"
 
 // Define the I2C master bus configuration
 const i2c_master_bus_config_t master_bus_config = {
@@ -31,7 +31,7 @@ i2c_master_dev_handle_t master_dev_handle;
  * @param void
  * @return void
  */
-void init_i2c()
+void i2c_init()
 {
     // Initialize the I2C bus
     ESP_ERROR_CHECK(i2c_new_master_bus(&master_bus_config, &master_bus_handle));
