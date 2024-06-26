@@ -14,7 +14,7 @@ static const char *TAG = "I2C Example";
 #define I2C_WRITE_BUFF_SIZE 2 // i2c max write buffer size
 
 // UART CONFIGURATION
-#define UART_BAUD_RATE 115200			 // UART baud rate
+#define UART_BAUD_RATE 3000000			 // UART baud rate
 #define UART_BUFFER_SIZE 1024			 // UART buffer size
 
 // MPU REGISTERS FOR COMMUNICATION

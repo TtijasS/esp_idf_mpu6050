@@ -7,7 +7,7 @@
 #include "esp_dsp.h"
 #include <math.h>
 
-#define N_SAMPLES 1024					 // Number of samples to collect before running FFT
+#define N_SAMPLES 2048 // Number of samples to collect before running FFT
 
 extern esp_err_t ret;
 
