@@ -3,6 +3,8 @@
 
 static const char *TAG = "I2C Example";
 
+#define N_SAMPLES 2048 // Number of samples to run FFT on
+
 // I2C CONFIGURATION
 #define I2C_SCL_IO CONFIG_I2C_MASTER_SCL // GPIO number used for I2C master clock
 #define I2C_SDA_IO CONFIG_I2C_MASTER_SDA // GPIO number used for I2C master data

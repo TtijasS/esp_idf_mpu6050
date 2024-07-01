@@ -38,4 +38,11 @@ typedef struct i2c_buffer_type
 extern mpu_data_type mpu_data;
 extern i2c_buffer_type i2c_buffer;
 
+typedef struct indexed_float_type
+{
+    uint32_t index;
+    float value;
+
+} indexed_float_type;
+
 #endif // DATA_STRUCTS_H

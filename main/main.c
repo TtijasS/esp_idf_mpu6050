@@ -52,12 +52,13 @@ void app_main(void)
         i++;
         if (i == N_SAMPLES)
         {
-            fft_run_with_hann(data_sampled, N_SAMPLES);
+            // fft_calculate_magnitudes()
+            // fft_plot_magnitudes(N_SAMPLES, 0, 30);
             i = 0;
         }
 
         // Use the configured UART settings to send accelerometer data
-        // uart_send_accel_data(&mpu_data);
+        uart_send_accel_data(&mpu_data);
 
         // Adjust delay as needed
         vTaskDelay(pdMS_TO_TICKS(1));
