@@ -52,13 +52,22 @@ void app_main(void)
         i++;
         if (i == N_SAMPLES)
         {
-            // fft_calculate_magnitudes()
+            // prepare window array and then apply in on data_sampled. Results are stored to fft_components
+            fft_apply_window_on_fft_complex(data_sampled, window, fft_components);
+            
+            // Run the fft calculations
+            fft_calculate_re_im(fft_components, N_SAMPLES*2);
+
+            // Calculate magnitudes
+            fft_calculate_magnitudes(magnitudes_indexed, N_SAMPLES);
+
+            fft_send_percentiles_over_uart(95.0, N_SAMPLES);
             // fft_plot_magnitudes(N_SAMPLES, 0, 30);
             i = 0;
         }
 
         // Use the configured UART settings to send accelerometer data
-        uart_send_accel_data(&mpu_data);
+        // uart_send_accel_data(&mpu_data);
 
         // Adjust delay as needed
         vTaskDelay(pdMS_TO_TICKS(1));
