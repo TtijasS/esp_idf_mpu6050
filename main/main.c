@@ -16,25 +16,15 @@
 // __attribute__((aligned(16))) float data_sampled[3][N_SAMPLES];   // Sampled data; x, y, z axes
 __attribute__((aligned(16))) float data_sampled[N_SAMPLES]; // Sampled data
 
-void app_main(void)
+SemaphoreHandle_t xSemaphoreMPUDataReady;
+SemaphoreHandle_t xSemaphoreFFTReady;
+
+void task_mpu_data_reading(void *pvParameters)
 {
-    ESP_LOGI(TAG, "Start Example.");
-
-    // Init I2C settings
-    i2c_init();
-    // Init custom UART settings (commented out to check FFT outputs)
-    // uart_init();
-    // Initialize FFT
-    fft_init();
-
-    // Setup the MPU6050 registers
-    mpu_initial_setup(&i2c_buffer);
-
+    ESP_LOGI(TAG, "Sampling task started");
     int i = 0;
     while (1)
     {
-        // Read and process MPU6050 data
-
         if (!mpu_data_read_extract(&i2c_buffer, &mpu_data))
         {
             ESP_LOGE(TAG, "Error reading MPU6050 data.");
@@ -43,35 +33,95 @@ void app_main(void)
         mpu_data_substract_err(&mpu_data);
         mpu_data_to_fs(&mpu_data);
 
-        // // Copy data to respective axis arrays
-        // memcpy(&data_sampled[0][i], &mpu_data.accel_gyro_g[3], sizeof(float)); // X-axis
-        // memcpy(&data_sampled[1][i], &mpu_data.accel_gyro_g[4], sizeof(float)); // Y-axis
-        // memcpy(&data_sampled[2][i], &mpu_data.accel_gyro_g[5], sizeof(float)); // Z-axis
-
         memcpy(&data_sampled[i], &mpu_data.accel_gyro_g[3], sizeof(float)); // X-axis
+        // printf("%.2f\n", data_sampled[i]);
         i++;
         if (i == N_SAMPLES)
         {
-            // prepare window array and then apply in on data_sampled. Results are stored to fft_components
+            i = 0;
+            // Signal FFT task
+            ESP_LOGI(TAG, "Data successfully sampled");
+            break;
+            xSemaphoreGive(xSemaphoreMPUDataReady);
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+
+    }
+}
+
+void task_fft_calculations(void *pvParameters)
+{
+    while (1)
+    {
+        // Wait for data to be ready
+        if (xSemaphoreTake(xSemaphoreMPUDataReady, portMAX_DELAY) == pdTRUE)
+        {
+            // Prepare window array and apply on data_sampled. Results are stored to fft_components
             fft_apply_window_on_fft_complex(data_sampled, window, fft_components);
-            
-            // Run the fft calculations
-            fft_calculate_re_im(fft_components, N_SAMPLES*2);
+            ESP_LOGI(TAG, "Applied window");
+
+            // Run the FFT calculations
+            fft_calculate_re_im(fft_components, N_SAMPLES * 2);
+            ESP_LOGI(TAG, "Calculated fft");
 
             // Calculate magnitudes
             fft_calculate_magnitudes(magnitudes_indexed, N_SAMPLES);
+            ESP_LOGI(TAG, "Calculated magnitudes");
 
-            fft_send_percentiles_over_uart(95.0, N_SAMPLES);
-            // fft_plot_magnitudes(N_SAMPLES, 0, 30);
-            i = 0;
+            // Signal UART task
+            xSemaphoreGive(xSemaphoreFFTReady);
         }
-
-        // Use the configured UART settings to send accelerometer data
-        // uart_send_accel_data(&mpu_data);
-
-        // Adjust delay as needed
-        vTaskDelay(pdMS_TO_TICKS(1));
     }
 
+    vTaskDelay(pdMS_TO_TICKS(10));
+}
+
+void task_uart_fft_components(void *pvParameters)
+{
+    while (1)
+    {
+        if (xSemaphoreTake(xSemaphoreFFTReady, portMAX_DELAY) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "Sending data over UART");
+            fft_send_percentiles_over_uart(95.0, N_SAMPLES);
+            vTaskDelay(pdMS_TO_TICKS(10));
+            break;
+        }
+    }
+}
+
+void app_main(void)
+{
+    ESP_LOGI(TAG, "Start Example.");
+
+    // Init I2C settings
+    i2c_init();
+
+    // Setup the MPU6050 registers
+    mpu_initial_setup(&i2c_buffer);
+
+    // // Init custom UART settings (commented out to check FFT outputs)
+    // uart_init();
+    // // Initialize FFT
+    // fft_init();
+
+
+    xSemaphoreMPUDataReady = xSemaphoreCreateBinary();
+    xSemaphoreFFTReady = xSemaphoreCreateBinary();
+
+    if (xSemaphoreMPUDataReady == NULL || xSemaphoreFFTReady == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create semaphores");
+        return;
+    }
+
+    // Create tasks
+    xTaskCreate(task_mpu_data_reading, "Sensor Task", SENSOR_TASK_STACK_SIZE, NULL, 1, NULL);
+    // xTaskCreate(task_fft_calculations, "FFT Task", FFT_TASK_STACK_SIZE, NULL, 2, NULL);
+    // xTaskCreate(task_uart_fft_components, "UART Task", UART_TASK_STACK_SIZE, NULL, 1, NULL);
+
+    vTaskDelete(NULL);
+
     ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
+
 }

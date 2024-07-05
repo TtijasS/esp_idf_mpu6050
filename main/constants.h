@@ -3,7 +3,11 @@
 
 static const char *TAG = "I2C Example";
 
-#define N_SAMPLES 2048 // Number of samples to run FFT on
+#define SENSOR_TASK_STACK_SIZE 2048     // 2048 words (8192 bytes)
+#define FFT_TASK_STACK_SIZE 4096        // 4096 words (16384 bytes)
+#define UART_TASK_STACK_SIZE 2048       // 2048 words (8192 bytes)
+
+#define N_SAMPLES 1028 // Number of samples to run FFT on
 
 // I2C CONFIGURATION
 #define I2C_SCL_IO CONFIG_I2C_MASTER_SCL // GPIO number used for I2C master clock
@@ -16,7 +20,7 @@ static const char *TAG = "I2C Example";
 #define I2C_WRITE_BUFF_SIZE 2 // i2c max write buffer size
 
 // UART CONFIGURATION
-#define UART_BAUD_RATE 3000000			 // UART baud rate
+#define UART_BAUD_RATE 115200			 // UART baud rate
 #define UART_BUFFER_SIZE 1024			 // UART buffer size
 
 // MPU REGISTERS FOR COMMUNICATION
