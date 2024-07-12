@@ -8,10 +8,10 @@
 
 
 // Extern declarations for global configurations and handles
-extern const i2c_master_bus_config_t master_bus_config;
-extern const i2c_device_config_t master_device_config;
-extern i2c_master_bus_handle_t master_bus_handle;
-extern i2c_master_dev_handle_t master_dev_handle;
+extern const i2c_master_bus_config_t i2c_master_bus_config;
+extern const i2c_device_config_t i2c_master_device_config;
+extern i2c_master_bus_handle_t i2c_master_bus_handle;
+extern i2c_master_dev_handle_t i2c_master_dev_handle;
 void i2c_init();
 
 #endif // MY_I2C_COM_H

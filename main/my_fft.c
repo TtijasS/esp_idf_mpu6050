@@ -2,9 +2,9 @@
 
 esp_err_t ret;
 
-__attribute__((aligned(16))) float window[N_SAMPLES];                          // Window coefficients
-__attribute__((aligned(16))) float fft_components[N_SAMPLES * 2];              // Real and imaginary part of sampled data_sampled [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
-__attribute__((aligned(16))) indexed_float_type magnitudes_indexed[N_SAMPLES]; // FFT output for plotting
+__attribute__((aligned(16))) float fft_window_arr[N_SAMPLES];                                        // Window coefficients
+__attribute__((aligned(16))) float fft_complex_arr[N_SAMPLES * 2];                            // Real and imaginary part of sampled data_sampled [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
+__attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[N_SAMPLES / 2]; // FFT output for plotting
 
 void fft_init()
 {
@@ -13,20 +13,22 @@ void fft_init()
     {
         ESP_LOGE(TAG, "Error in FFT init: %s", esp_err_to_name(ret));
     }
+
+    ESP_LOGI(TAG, "FFT init complete");
 }
 
-void fft_apply_window_on_fft_complex(float *data_sampled, float *window, float *fft_components)
+void fft_apply_hann_windowing(float *sampled_data_arr, float *window_arr, float *complex_arr)
 {
     // Prepare window coefficients
-    dsps_wind_hann_f32(window, N_SAMPLES);
+    dsps_wind_hann_f32(window_arr, N_SAMPLES);
     // dsps_wind_blackman_f32(window, N_SAMPLES);
 
     // Prepare fft_components array
     for (int i = 0; i < N_SAMPLES; i++)
     {
         // [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
-        fft_components[2 * i] = data_sampled[i] * window[i]; // Real part (@ i-th index)
-        fft_components[2 * i + 1] = 0;                       // Imaginary part (@ i + 1 index)
+        complex_arr[2 * i] = sampled_data_arr[i] * window_arr[i]; // Real part (@ i-th index)
+        complex_arr[2 * i + 1] = 0;                       // Imaginary part (@ i + 1 index)
     }
 }
 
@@ -36,14 +38,13 @@ void fft_apply_window_on_fft_complex(float *data_sampled, float *window, float *
  * Calculate re and im parts of the sampled signal
  * and store results into fft_components array of length N_SAMPLES*2
  */
-void fft_calculate_re_im(float *fft_components, size_t arr_len)
+void fft_calculate_re_im(float *complex_arr, size_t arr_len)
 {
-    // Perform FFT
-    dsps_fft2r_fc32(fft_components, arr_len);
-    // Bit reverse
-    dsps_bit_rev_fc32(fft_components, arr_len);
-    // Convert one complex vector to two complex vectors
-    dsps_cplx2reC_fc32(fft_components, arr_len);
+    ESP_ERROR_CHECK(dsps_fft2r_fc32(complex_arr, arr_len));
+
+    ESP_ERROR_CHECK(dsps_bit_rev_fc32(complex_arr, arr_len));
+
+    ESP_ERROR_CHECK(dsps_cplx2reC_fc32(complex_arr, arr_len));
 }
 
 /**
@@ -54,14 +55,27 @@ void fft_calculate_re_im(float *fft_components, size_t arr_len)
  * @param magnitudes_indexed: pointer to array of structs with index and magnitude value
  * @param arr_len: length of magnitudes_indexed array
  */
-void fft_calculate_magnitudes(indexed_float_type *magnitudes_indexed, size_t arr_len)
+void fft_calculate_magnitudes(indexed_float_type *indexed_magnitudes_arr, size_t arr_len)
 {
-    for (int i = 0; i < arr_len / 2; i++)
+    if (indexed_magnitudes_arr == NULL)
     {
-        magnitudes_indexed[i].index = i;
-        magnitudes_indexed[i].value = sqrtf(((fft_components[i * 2] * fft_components[i * 2]) + (fft_components[i * 2 + 1] * fft_components[i * 2 + 1])) / N_SAMPLES);
+        ESP_LOGE(TAG, "Null pointer error in fft_calculate_magnitudes");
+        return;
+    }
+
+    if (arr_len == 0)
+    {
+        ESP_LOGE(TAG, "Array length is zero in fft_calculate_magnitudes");
+        return;
+    }
+
+    for (int i = 0; i < arr_len; i++)
+    {
+        indexed_magnitudes_arr[i].index = i;
+        indexed_magnitudes_arr[i].value = sqrtf((fft_complex_arr[i * 2] * fft_complex_arr[i * 2]) + (fft_complex_arr[i * 2 + 1] * fft_complex_arr[i * 2 + 1]) / N_SAMPLES);
     }
 }
+
 
 /**
  * @brief Sort the base_array of indexed_float_type in descending order.
@@ -71,7 +85,7 @@ void fft_calculate_magnitudes(indexed_float_type *magnitudes_indexed, size_t arr
  */
 void fft_sort_magnitudes(indexed_float_type *base_array, size_t arr_len)
 {
-    qsort(base_array, arr_len / 2, sizeof(indexed_float_type), compare_indexed_floats_descending);
+    qsort(base_array, arr_len, sizeof(indexed_float_type), compare_indexed_float_type_descending);
 }
 
 /**
@@ -86,36 +100,28 @@ void fft_sort_magnitudes(indexed_float_type *base_array, size_t arr_len)
  */
 void fft_plot_magnitudes(size_t arr_len, int min, int max)
 {
-    // Display FFT output
-    printf("Plot mag:\n");
-    fft_calculate_magnitudes(magnitudes_indexed, N_SAMPLES);
-
     // construct tmp magnitudes float array
     float magnitudes[arr_len];
     for (size_t i = 0; i < arr_len; i++)
     {
-        magnitudes[i] = magnitudes_indexed[i].value;
+        magnitudes[i] = fft_magnitudes_arr[i].value;
     }
 
-    dsps_view(magnitudes, arr_len / 2, 64, 16, min, max, '|');
+    dsps_view(magnitudes, arr_len, 64, 16, min, max, '|');
 }
 
 /**
- * @brief Comparison function of two indexed_float_type structs
- *
- * Compares struct_a.value and struct_b.value in a way,
- * that qsort() will sort the array in descending order.
- *
- * @param a
- * @param b
- * @return int
+ * @brief Compare indexed_float_type structs in descending order
+ * 
+ * @param a 
+ * @param b 
+ * @return int 
  */
-int compare_indexed_floats_descending(const void *a, const void *b)
+int compare_indexed_float_type_descending(const void *a, const void *b)
 {
-    float a_val = (const float)((const indexed_float_type *)a)->value;
-    float b_val = (const float)((const indexed_float_type *)b)->value;
-
-    return (a_val > b_val) - (a_val < b_val);
+	float va = ((const indexed_float_type *)a)->value;
+	float vb = ((const indexed_float_type *)b)->value;
+	return (va < vb) - (va > vb);
 }
 
 /**
@@ -128,7 +134,7 @@ int compare_indexed_floats_descending(const void *a, const void *b)
  * @param arr_len: array length
  * @return size_t
  */
-size_t fft_percentile_n_components(float percentile, size_t arr_len)
+uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len)
 {
     return arr_len - ((percentile / 100) * arr_len);
 }
@@ -137,17 +143,21 @@ size_t fft_percentile_n_components(float percentile, size_t arr_len)
  * @brief Prepare uart buffer with the most significant fft components
  *
  * @param data_buffer: buffer that will be filled with components
- * @param buff_len: length of the buffer
+ * @param n_msb_components: number of component groups to copy
  * @param magnitudes: magnitudes array
  * @param fft_components: real and imaginary fft components
  */
-void fft_prepare_uart_data_buffer(uint8_t *data_buffer, size_t buff_len, indexed_float_type *magnitudes, float *fft_components)
+void fft_prepare_uart_data_buffer(uint8_t *data_buffer, uint32_t n_msb_components, indexed_float_type *magnitudes, float *fft_components)
 {
-    size_t _index = 0;
+    uint32_t _index = 0;
     float *_value;
 
-    for (size_t i = 0; i < buff_len; i++)
+    for (uint32_t i = 0; i < n_msb_components; i++)
     {
+        if (i >= MAGNITUDES_SIZE){
+            ESP_LOGE(TAG, "Index out of bounds in fft_prepare_uart_data_buffer");
+            break;
+        }
         _index = magnitudes[i].index;
         _value = &magnitudes[i].value;
 
@@ -159,43 +169,69 @@ void fft_prepare_uart_data_buffer(uint8_t *data_buffer, size_t buff_len, indexed
 
 /**
  * @brief Prepare metadata that will be sent over uart
- * 
+ *
  * We need send the number of samples that were used in fft calculation and how many most significant components were sent over.
- * 
+ *
  * @param metadata_buffer: pointer to buffer array that will be prepared
  * @param n_samples: number of samples used in fft calculation
  * @param n_components: number of most significant components that will get sent over uart
  */
-void fft_prepare_metadata_buffer(uint8_t *metadata_buffer, size_t n_samples, size_t n_components)
+void fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, uint32_t n_components)
 {
-    memcpy(&metadata_buffer[0], &n_components, sizeof(size_t));
-    memcpy(&metadata_buffer[sizeof(size_t)], &n_samples, sizeof(size_t));
+    memcpy(&metadata_buffer[0], &n_samples, sizeof(uint32_t));
+    memcpy(&metadata_buffer[sizeof(uint32_t)], &n_components, sizeof(uint32_t));
 }
 
 /**
  * @brief Send the first n components (magnitude, re, im) of DFFT calculation
  *
- * @param percentile: float < 100
- * @param arr_len: array length
+ * @param n_samples: number of samples taken during the vibration sampling process
+ * @param n_msb_elements: number of most significant components to send over uart
  */
-void fft_send_percentiles_over_uart(float percentile, size_t arr_len)
+void fft_send_msb_components_over_uart(uint32_t n_samples, uint32_t n_msb_elements)
 {
-    // Sort the magnitudes array
-    qsort(magnitudes_indexed, arr_len, sizeof(indexed_float_type), compare_indexed_floats_descending);
-    // Calculate how many most significant components to print out
-    size_t n_components = fft_percentile_n_components(percentile, arr_len / 2);
+    // Prepare metadata buffer to send sample size and number of msb components
+    uint8_t metadata_buffer[sizeof(uint32_t) * 2];
+    fft_prepare_metadata_buffer(metadata_buffer, n_samples, n_msb_elements);
 
-    // Prepare the data_buffer for n largest elements.
-    // Each element consists of [magnitude, real, imaginary], therefore *3
-    uint8_t data_buffer[sizeof(float) * n_components * 3];
-    fft_prepare_uart_data_buffer(data_buffer, n_components, magnitudes_indexed, fft_components);
+    // Prepare the data_buffer for n largest elements [magnitude, real, imaginary]
+    uint8_t data_buffer[(sizeof(float) * 3) * n_msb_elements];
+    fft_prepare_uart_data_buffer(data_buffer, n_msb_elements, fft_magnitudes_arr, fft_complex_arr);
 
-    uint8_t metadata_buffer[sizeof(size_t) * 2];
-    fft_prepare_metadata_buffer(metadata_buffer, N_SAMPLES, n_components);
+    fft_debug_uart_buffers(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
 
-    // Send over the metadata
-    uart_write_bytes(uart_num, (const char *)metadata_buffer, sizeof(size_t)*2);
+    // Send data over UART
+    uart_set_baudrate(uart_num, 3000000);
+    
 
-    // Prepare buffer for 3 floats: magnitude, real, imaginary
-    uart_write_bytes(uart_num, (const char *)data_buffer, sizeof(float) * 3 * n_components);
+
+}
+
+void fft_debug_uart_buffers(uint8_t *metadata_buffer, uint32_t metadata_size, uint8_t *data_buffer, uint32_t data_size)
+{
+    // construct back original values and print them
+    ESP_LOGI(TAG, "Metadata:");
+    for (int i = 0; i < metadata_size / sizeof(uint32_t); i++)
+    {
+        uint32_t tmp_value;
+        memcpy(&tmp_value, &metadata_buffer[i*sizeof(uint32_t)], sizeof(uint32_t));
+        printf("%ld, ", tmp_value);
+    }
+    printf("\n");
+
+    ESP_LOGI(TAG, "Data mag, re, im:");
+    for (int i = 0; i < data_size / sizeof(float); i++)
+    {
+        float tmp_value = 0.0;
+        memcpy(&tmp_value, &data_buffer[i*sizeof(float)], sizeof(float));
+        printf("%.5f, ", tmp_value);
+    }
+    printf("\n");
+    for (int i = 0; i < 20; i++)
+    {
+        uint32_t _index = fft_magnitudes_arr[i].index;
+        float _value = fft_magnitudes_arr[i].value;
+        printf("%.5f, %.5f, %.5f, ", _value, fft_complex_arr[_index * 2], fft_complex_arr[_index * 2 + 1]);
+    }
+    printf("\n");
 }

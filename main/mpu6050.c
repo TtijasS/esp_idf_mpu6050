@@ -38,6 +38,8 @@ void mpu_initial_setup(i2c_buffer_type *i2c_buffer)
     i2c_buffer->write_buffer[1] = MPU_FIFO_EN_MASK; // Fifo enable gyro and accel data setting
     mpu_transmit(i2c_buffer, 2);
 
+    ESP_LOGI(TAG, "MPU setup complete");
+
     // // Check the integrity of the configured registers
     // i2c_buffer->write_buffer[0] = MPU_PWR_REG;
     // mpu_transmit_receive(i2c_buffer, 1, 1); // Should be 0x00h (0d)
@@ -85,7 +87,7 @@ void mpu_transmit_receive(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size, u
         ESP_LOGI(TAG, "The allocated i2c_buffer.read_buffer size is smaller than %d", read_buf_size);
         return;
     }
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(master_dev_handle, i2c_buffer->write_buffer, write_buf_size, i2c_buffer->read_buffer, read_buf_size, I2C_TIMEOUT_MS));
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(i2c_master_dev_handle, i2c_buffer->write_buffer, write_buf_size, i2c_buffer->read_buffer, read_buf_size, I2C_TIMEOUT_MS));
 }
 
 /**
@@ -110,7 +112,7 @@ void mpu_transmit(i2c_buffer_type *i2c_buffer, uint8_t write_buf_size)
         ESP_LOGI(TAG, "The allocated i2c_buffer.write_buffer size is smaller than %d", write_buf_size);
         return;
     }
-    ESP_ERROR_CHECK(i2c_master_transmit(master_dev_handle, i2c_buffer->write_buffer, write_buf_size, I2C_TIMEOUT_MS));
+    ESP_ERROR_CHECK(i2c_master_transmit(i2c_master_dev_handle, i2c_buffer->write_buffer, write_buf_size, I2C_TIMEOUT_MS));
 }
 
 /**
@@ -271,7 +273,7 @@ bool mpu_data_sum_error(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data, bo
 }
 
 /**
- * @brief Calibrate the MPU6050 sensor
+ * @brief Calibrate the MPU6050 sensor using direct register access
  *
  * The function reads the accel and gyro data straight from the accel and gyro registers and averages out the errors.
  * Error values are store into the mpu_data.avg_err array.
@@ -367,7 +369,7 @@ void mpu_data_to_fs(mpu_data_type *mpu_data)
 }
 
 /**
- * @brief Calculate average error of the MPU6050 sensor
+ * @brief Calculate average error of the MPU6050 sensor using FIFO buffer
  *
  * @param i2c_buffer struct with write_buffer, read_buffer
  * @param mpu_data struct with avg_errors
@@ -523,4 +525,13 @@ void mpu_data_substract_err(mpu_data_type *mpu_data)
         else
             mpu_data->accel_gyro_raw[i] = (int16_t)temp;
     }
+}
+
+void mpu_avg_err_print(mpu_data_type *mpu_data)
+{
+    for (int i = 0; i < 6; ++i)
+    {
+        printf("%.6f, ", mpu_data->avg_err[i]);
+    }
+    printf("\n");
 }

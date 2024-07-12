@@ -13,15 +13,28 @@
 #include "my_uart_com.h"
 #include "my_fft.h"
 
-// __attribute__((aligned(16))) float data_sampled[3][N_SAMPLES];   // Sampled data; x, y, z axes
 __attribute__((aligned(16))) float data_sampled[N_SAMPLES]; // Sampled data
 
-SemaphoreHandle_t xSemaphoreMPUDataReady;
-SemaphoreHandle_t xSemaphoreFFTReady;
-
-void task_mpu_data_reading(void *pvParameters)
+void app_main(void)
 {
-    ESP_LOGI(TAG, "Sampling task started");
+    printf("\n");
+    ESP_LOGI(TAG, "Start Example.");
+
+    // Init I2C and UART
+    i2c_init();
+    // Configure MPU6050
+    mpu_initial_setup(&i2c_buffer);
+    // Configure UART
+    uart_init();
+    uart_set_baudrate(uart_num, 115200);
+
+    // Init FFT memory
+    fft_init();
+    
+
+    // mpu_data_calibrate(&i2c_buffer, &mpu_data, 100);
+    mpu_avg_err_print(&mpu_data);
+
     int i = 0;
     while (1)
     {
@@ -32,96 +45,40 @@ void task_mpu_data_reading(void *pvParameters)
         }
         mpu_data_substract_err(&mpu_data);
         mpu_data_to_fs(&mpu_data);
-
         memcpy(&data_sampled[i], &mpu_data.accel_gyro_g[3], sizeof(float)); // X-axis
-        // printf("%.2f\n", data_sampled[i]);
+        // printf("%.4f\n", mpu_data.accel_gyro_g[3]);
+        // vTaskDelay(pdMS_TO_TICKS(1));
         i++;
         if (i == N_SAMPLES)
         {
             i = 0;
-            // Signal FFT task
             ESP_LOGI(TAG, "Data successfully sampled");
             break;
-            xSemaphoreGive(xSemaphoreMPUDataReady);
-        }
-        vTaskDelay(pdMS_TO_TICKS(10));
-
-    }
-}
-
-void task_fft_calculations(void *pvParameters)
-{
-    while (1)
-    {
-        // Wait for data to be ready
-        if (xSemaphoreTake(xSemaphoreMPUDataReady, portMAX_DELAY) == pdTRUE)
-        {
-            // Prepare window array and apply on data_sampled. Results are stored to fft_components
-            fft_apply_window_on_fft_complex(data_sampled, window, fft_components);
-            ESP_LOGI(TAG, "Applied window");
-
-            // Run the FFT calculations
-            fft_calculate_re_im(fft_components, N_SAMPLES * 2);
-            ESP_LOGI(TAG, "Calculated fft");
-
-            // Calculate magnitudes
-            fft_calculate_magnitudes(magnitudes_indexed, N_SAMPLES);
-            ESP_LOGI(TAG, "Calculated magnitudes");
-
-            // Signal UART task
-            xSemaphoreGive(xSemaphoreFFTReady);
         }
     }
 
-    vTaskDelay(pdMS_TO_TICKS(10));
-}
+    vTaskDelay(pdMS_TO_TICKS(100));
+   
+    fft_apply_hann_windowing(data_sampled, fft_window_arr, fft_complex_arr);
+    ESP_LOGI(TAG, "Window prepared and data merged to fft_components");
 
-void task_uart_fft_components(void *pvParameters)
-{
-    while (1)
-    {
-        if (xSemaphoreTake(xSemaphoreFFTReady, portMAX_DELAY) == pdTRUE)
-        {
-            ESP_LOGI(TAG, "Sending data over UART");
-            fft_send_percentiles_over_uart(95.0, N_SAMPLES);
-            vTaskDelay(pdMS_TO_TICKS(10));
-            break;
-        }
-    }
-}
+    fft_calculate_re_im(fft_complex_arr, N_SAMPLES);
+    ESP_LOGI(TAG, "FFT calculated");
+    vTaskDelay(pdMS_TO_TICKS(50));
 
-void app_main(void)
-{
-    ESP_LOGI(TAG, "Start Example.");
+    fft_calculate_magnitudes(fft_magnitudes_arr, MAGNITUDES_SIZE);
 
-    // Init I2C settings
-    i2c_init();
+    fft_sort_magnitudes(fft_magnitudes_arr, MAGNITUDES_SIZE);
+    ESP_LOGI(TAG, "Magnitudes sorted");
 
-    // Setup the MPU6050 registers
-    mpu_initial_setup(&i2c_buffer);
+    uint32_t n_msb_components = fft_percentile_n_components(90, MAGNITUDES_SIZE);
 
-    // // Init custom UART settings (commented out to check FFT outputs)
-    // uart_init();
-    // // Initialize FFT
-    // fft_init();
+    fft_send_msb_components_over_uart(N_SAMPLES, n_msb_components);
 
+    ESP_LOGI(TAG, "End Example.");
 
-    xSemaphoreMPUDataReady = xSemaphoreCreateBinary();
-    xSemaphoreFFTReady = xSemaphoreCreateBinary();
-
-    if (xSemaphoreMPUDataReady == NULL || xSemaphoreFFTReady == NULL)
-    {
-        ESP_LOGE(TAG, "Failed to create semaphores");
-        return;
-    }
-
-    // Create tasks
-    xTaskCreate(task_mpu_data_reading, "Sensor Task", SENSOR_TASK_STACK_SIZE, NULL, 1, NULL);
-    // xTaskCreate(task_fft_calculations, "FFT Task", FFT_TASK_STACK_SIZE, NULL, 2, NULL);
-    // xTaskCreate(task_uart_fft_components, "UART Task", UART_TASK_STACK_SIZE, NULL, 1, NULL);
-
-    vTaskDelete(NULL);
-
-    ESP_ERROR_CHECK(i2c_del_master_bus(master_bus_handle));
+    // delete i2c handle
+    ESP_ERROR_CHECK(i2c_del_master_bus(i2c_master_bus_handle));
 
 }
+

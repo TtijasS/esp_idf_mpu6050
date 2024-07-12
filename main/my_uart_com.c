@@ -33,3 +33,11 @@ void uart_send_accel_data(mpu_data_type *mpu_data)
     uart_write_bytes(uart_num, (const char *)data, sizeof(float) * 3);
     uart_write_bytes(uart_num, "\t", 1);
 }
+
+void uart_send_msb_components(uint8_t *metadata_buffer, uint32_t metadata_size, uint8_t *data_buffer, uint32_t data_size)
+{
+    // Send metadata
+    uart_write_bytes(uart_num, (const char *)metadata_buffer, metadata_size);
+    // Send data
+    uart_write_bytes(uart_num, (const char *)data_buffer, data_size);
+}
