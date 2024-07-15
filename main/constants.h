@@ -21,7 +21,7 @@
 	#define I2C_SCL_IO CONFIG_I2C_MASTER_SCL // GPIO number used for I2C master clock
 	#define I2C_SDA_IO CONFIG_I2C_MASTER_SDA // GPIO number used for I2C master data
 	#define I2C_PORT_NUM I2C_NUM_0			 // I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip
-	#define I2C_FREQ_HZ 100000				 // I2C master clock frequency
+	#define I2C_FREQ_HZ 400000				 // I2C master clock frequency
 	#define I2C_TIMEOUT_MS 1000				 // I2C timeout in milliseconds
 	// buffer sizes
 	#define I2C_READ_BUFF_SIZE 14 // I2C max read buffer size

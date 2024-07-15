@@ -150,7 +150,7 @@ uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len)
 void fft_prepare_uart_data_buffer(uint8_t *data_buffer, uint32_t n_msb_components, indexed_float_type *magnitudes, float *fft_components)
 {
     uint32_t _index = 0;
-    float *_value;
+    float index_as_float = 0.0;
 
     for (uint32_t i = 0; i < n_msb_components; i++)
     {
@@ -159,10 +159,11 @@ void fft_prepare_uart_data_buffer(uint8_t *data_buffer, uint32_t n_msb_component
             break;
         }
         _index = magnitudes[i].index;
-        _value = &magnitudes[i].value;
+        index_as_float = (float)_index;
 
-        // Copy [magnitude, real, imaginary] parts to data buffer
-        memcpy(&data_buffer[i * 3 * sizeof(float)], _value, sizeof(float));
+        // Copy [index, real, imaginary] parts to data buffer
+        // index is converted to float for standardization reasons
+        memcpy(&data_buffer[i * 3 * sizeof(float)], &index_as_float, sizeof(float));
         memcpy(&data_buffer[(i * 3 + 1) * sizeof(float)], &fft_components[_index * 2], sizeof(float) * 2);
     }
 }
@@ -219,7 +220,7 @@ void fft_debug_uart_buffers(uint8_t *metadata_buffer, uint32_t metadata_size, ui
     }
     printf("\n");
 
-    ESP_LOGI(TAG, "Data mag, re, im:");
+    ESP_LOGI(TAG, "index, re, im:");
     for (int i = 0; i < data_size / sizeof(float); i++)
     {
         float tmp_value = 0.0;
@@ -230,8 +231,8 @@ void fft_debug_uart_buffers(uint8_t *metadata_buffer, uint32_t metadata_size, ui
     for (int i = 0; i < 20; i++)
     {
         uint32_t _index = fft_magnitudes_arr[i].index;
-        float _value = fft_magnitudes_arr[i].value;
-        printf("%.5f, %.5f, %.5f, ", _value, fft_complex_arr[_index * 2], fft_complex_arr[_index * 2 + 1]);
+        float _index_as_float = (float)_index;
+        printf("%.1f, %.5f, %.5f, ", _index_as_float, fft_complex_arr[_index * 2], fft_complex_arr[_index * 2 + 1]);
     }
     printf("\n");
 }

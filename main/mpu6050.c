@@ -223,6 +223,15 @@ bool mpu_fifo_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
     return false;
 }
 
+
+/**
+ * @brief Read and extract accel and gyro data directly from sencor registers (not from fifo)
+ * 
+ * @param i2c_buffer: struct with read_buffer, write_buffer
+ * @param mpu_data: struct with accel_gyro_raw 
+ * @return true 
+ * @return false 
+ */
 bool mpu_data_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
 {
     if (I2C_READ_BUFF_SIZE < 14)
@@ -238,6 +247,28 @@ bool mpu_data_read_extract(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data)
     mpu_data->accel_gyro_raw[3] = (i2c_buffer->read_buffer[8] << 8) | i2c_buffer->read_buffer[9];
     mpu_data->accel_gyro_raw[4] = (i2c_buffer->read_buffer[10] << 8) | i2c_buffer->read_buffer[11];
     mpu_data->accel_gyro_raw[5] = (i2c_buffer->read_buffer[12] << 8) | i2c_buffer->read_buffer[13];
+    return true;
+}
+
+/**
+ * @brief Read and extract accel data from the sensor registers (not from fifo)
+ * 
+ * @param i2c_buffer: struct with read_buffer, write_buffer
+ * @param mpu_data: struct with accel_gyro_raw 
+ * @return true 
+ * @return false 
+ */
+bool mpu_data_read_extract_accel(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_data){
+    if (I2C_READ_BUFF_SIZE < 6)
+    {
+        ESP_LOGI(TAG, "The allocated i2c_buffer.read_buffer size is smaller than 6");
+        return false;
+    }
+    i2c_buffer->write_buffer[0] = MPU_ACCEL_X_H_REG;
+    mpu_transmit_receive(i2c_buffer, 1, 6);
+    mpu_data->accel_gyro_raw[0] = (i2c_buffer->read_buffer[0] << 8) | i2c_buffer->read_buffer[1];
+    mpu_data->accel_gyro_raw[1] = (i2c_buffer->read_buffer[2] << 8) | i2c_buffer->read_buffer[3];
+    mpu_data->accel_gyro_raw[2] = (i2c_buffer->read_buffer[4] << 8) | i2c_buffer->read_buffer[5];
     return true;
 }
 
@@ -358,11 +389,13 @@ void mpu_data_reset(mpu_data_type *mpu_data)
  * @param accel_gyro_raw
  * @return void
  */
-void mpu_data_to_fs(mpu_data_type *mpu_data)
+void mpu_data_to_fs(mpu_data_type *mpu_data, bool accel_only)
 {
     mpu_data->accel_gyro_g[0] = (float)mpu_data->accel_gyro_raw[0] / MPU_ACCEL_FS; //  - mpu_data->avg_err[0]
     mpu_data->accel_gyro_g[1] = (float)mpu_data->accel_gyro_raw[1] / MPU_ACCEL_FS; //  - mpu_data->avg_err[1]
     mpu_data->accel_gyro_g[2] = (float)mpu_data->accel_gyro_raw[2] / MPU_ACCEL_FS; //  - mpu_data->avg_err[2]
+    if (accel_only)
+        return;
     mpu_data->accel_gyro_g[3] = (float)mpu_data->accel_gyro_raw[3] / MPU_GYRO_FS;  //  - mpu_data->avg_err[3]
     mpu_data->accel_gyro_g[4] = (float)mpu_data->accel_gyro_raw[4] / MPU_GYRO_FS;  //  - mpu_data->avg_err[4]
     mpu_data->accel_gyro_g[5] = (float)mpu_data->accel_gyro_raw[5] / MPU_GYRO_FS;  //  - mpu_data->avg_err[5]
@@ -467,7 +500,7 @@ float *mpu_fifo_read_to_array(i2c_buffer_type *i2c_buffer, mpu_data_type *mpu_da
     {
         // Subtract average error from the raw data (useful if the error was calculated before)
         if (subtract_err)
-            mpu_data_substract_err(mpu_data);
+            mpu_data_substract_err(mpu_data, false);
 
         // Sum the raw data to the readings_array
         for (int i = 0; i < 6; ++i)
@@ -511,10 +544,14 @@ void mpu_avg_err_divide(mpu_data_type *mpu_data, uint16_t divisor)
  * @brief Substract the average error from the MPU6050 cycles
  *
  * @param mpu_data mpu data struct with accel_gyro_raw, avg_errors, accel_gyro_g
+ * @param accel_only if true, only the accelerometer data is substracted
  */
-void mpu_data_substract_err(mpu_data_type *mpu_data)
+void mpu_data_substract_err(mpu_data_type *mpu_data, bool accel_only)
 {
-    for (int i = 0; i < 6; ++i)
+    uint8_t i_limit = 6;
+    if (accel_only)
+        i_limit = 3;
+    for (int i = 0; i < i_limit; ++i)
     {
         float temp = (float)mpu_data->accel_gyro_raw[i] - mpu_data->avg_err[i];
         // if temp is larger than max int16_t value, set it to max int16_t value or smaller than min int16_t value, set it to min int16_t value

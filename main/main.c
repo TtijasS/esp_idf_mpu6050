@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "constants.h"
 #include "mpu6050.h"
 #include "my_i2c_com.h"
@@ -30,12 +31,15 @@ void app_main(void)
 
     // Init FFT memory
     fft_init();
-    
 
+    ESP_LOGI(TAG, "i2c frequency Hz: %lu", i2c_master_device_config.scl_speed_hz);
     // mpu_data_calibrate(&i2c_buffer, &mpu_data, 100);
-    mpu_avg_err_print(&mpu_data);
+    // mpu_avg_err_print(&mpu_data);
 
     int i = 0;
+    uint64_t deltatime = 0;
+    
+    deltatime = esp_timer_get_time();
     while (1)
     {
         if (!mpu_data_read_extract(&i2c_buffer, &mpu_data))
@@ -43,21 +47,55 @@ void app_main(void)
             ESP_LOGE(TAG, "Error reading MPU6050 data.");
             continue;
         }
-        mpu_data_substract_err(&mpu_data);
-        mpu_data_to_fs(&mpu_data);
-        memcpy(&data_sampled[i], &mpu_data.accel_gyro_g[3], sizeof(float)); // X-axis
+        mpu_data_substract_err(&mpu_data, false);
+        mpu_data_to_fs(&mpu_data, false);
+        memcpy(&data_sampled[i], &mpu_data.accel_gyro_g[0], sizeof(float)); // X-axis
         // printf("%.4f\n", mpu_data.accel_gyro_g[3]);
         // vTaskDelay(pdMS_TO_TICKS(1));
         i++;
         if (i == N_SAMPLES)
         {
+            deltatime = esp_timer_get_time() - deltatime;
             i = 0;
-            ESP_LOGI(TAG, "Data successfully sampled");
+            ESP_LOGI(TAG, "Data successfully sampled in %llu ms, %llu us per sample batch, %llu us per byte", deltatime / 1000, deltatime / N_SAMPLES, deltatime / N_SAMPLES / 14);
             break;
         }
     }
 
+    for (int i = 0; i < 40; i++)
+        printf("%.3f; ", data_sampled[i]);
+    
+    printf("\n");
+
     vTaskDelay(pdMS_TO_TICKS(100));
+    deltatime = esp_timer_get_time();
+    while (1)
+    {
+        if (!mpu_data_read_extract_accel(&i2c_buffer, &mpu_data))
+        {
+            ESP_LOGE(TAG, "Error reading MPU6050 data.");
+            continue;
+        }
+        mpu_data_substract_err(&mpu_data, true);
+        mpu_data_to_fs(&mpu_data, true);
+        memcpy(&data_sampled[i], &mpu_data.accel_gyro_g[0], sizeof(float)); // X-axis
+        // printf("%.4f\n", mpu_data.accel_gyro_g[3]);
+        // vTaskDelay(pdMS_TO_TICKS(1));
+        i++;
+        if (i == N_SAMPLES)
+        {
+            deltatime = esp_timer_get_time() - deltatime;
+            i = 0;
+            ESP_LOGI(TAG, "Data successfully sampled in %llu ms, %llu us per sample batch, %llu us per byte", deltatime / 1000, deltatime / N_SAMPLES, deltatime / N_SAMPLES / 6);
+            break;
+        }
+    }
+
+    for (int i = 0; i < 40; i++)
+        printf("%.3f; ", data_sampled[i]);
+    printf("\n");
+
+    // vTaskDelay(pdMS_TO_TICKS(100));
    
     fft_apply_hann_windowing(data_sampled, fft_window_arr, fft_complex_arr);
     ESP_LOGI(TAG, "Window prepared and data merged to fft_components");
@@ -71,7 +109,7 @@ void app_main(void)
     fft_sort_magnitudes(fft_magnitudes_arr, MAGNITUDES_SIZE);
     ESP_LOGI(TAG, "Magnitudes sorted");
 
-    uint32_t n_msb_components = fft_percentile_n_components(90, MAGNITUDES_SIZE);
+    uint32_t n_msb_components = fft_percentile_n_components(80, MAGNITUDES_SIZE);
 
     fft_send_msb_components_over_uart(N_SAMPLES, n_msb_components);
 
