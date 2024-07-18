@@ -26,10 +26,10 @@ void uart_init()
     ESP_ERROR_CHECK(uart_driver_install(uart_num, uart_buffer_size, uart_buffer_size, 10, NULL, 0));
 }
 
-void uart_send_accel_data(mpu_data_type *mpu_data)
+void uart_send_accel_data(mpuDataType *mpu_data_t)
 {
     uint8_t data[sizeof(float) * 3];
-    memcpy(data, &mpu_data->accel_gyro_g[3], sizeof(float) * 3);
+    memcpy(data, &mpu_data_t->accel_gyro_g[3], sizeof(float) * 3);
     uart_write_bytes(uart_num, (const char *)data, sizeof(float) * 3);
     uart_write_bytes(uart_num, "\t", 1);
 }

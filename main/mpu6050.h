@@ -9,25 +9,25 @@
 #include <esp_log.h>
 
 // Functions prototypes
-void mpu_initial_setup(i2c_buffer_type *);
-void mpu_transmit_receive(i2c_buffer_type *, uint8_t, uint8_t);
-void mpu_transmit(i2c_buffer_type *, uint8_t);
-void mpu_fifo_enable(i2c_buffer_type *);
-void mpu_fifo_reset(i2c_buffer_type *);
-uint16_t mpu_fifo_count(i2c_buffer_type *);
-bool mpu_fifo_overflow_check(i2c_buffer_type *);
-bool mpu_fifo_read_extract(i2c_buffer_type *, mpu_data_type *);
-void mpu_fifo_extract_buffer(i2c_buffer_type *, mpu_data_type *);
-void mpu_data_to_fs(mpu_data_type *mpu_data, bool accel_only);
-bool mpu_calibrate(i2c_buffer_type*, mpu_data_type *, uint8_t, bool);
-void mpu_data_substract_err(mpu_data_type *mpu_data, bool accel_only);
-void mpu_avg_err_divide(mpu_data_type *, uint16_t);
-float *mpu_fifo_read_to_array(i2c_buffer_type *, mpu_data_type *, float *, uint8_t, bool, bool);
-bool mpu_data_read_extract(i2c_buffer_type *, mpu_data_type *);
-bool mpu_data_read_extract_accel(i2c_buffer_type *, mpu_data_type *);
-bool mpu_data_sum_error(i2c_buffer_type *, mpu_data_type *, bool);
-bool mpu_data_calibrate(i2c_buffer_type *, mpu_data_type *, uint8_t);
-void mpu_data_reset(mpu_data_type *);
-void mpu_avg_err_print(mpu_data_type *);
+void mpu_initial_setup(i2cBufferType *);
+void mpu_transmit_receive(i2cBufferType *, uint8_t, uint8_t);
+void mpu_transmit(i2cBufferType *, uint8_t);
+void mpu_fifo_enable(i2cBufferType *);
+void mpu_fifo_reset(i2cBufferType *);
+uint16_t mpu_fifo_count(i2cBufferType *);
+bool mpu_fifo_overflow_check(i2cBufferType *);
+bool mpu_fifo_read_extract(i2cBufferType *, mpuDataType *);
+void mpu_fifo_extract_buffer(i2cBufferType *, mpuDataType *);
+void mpu_data_to_fs(mpuDataType *mpu_data_t, bool accel_only);
+bool mpu_calibrate(i2cBufferType*, mpuDataType *, uint8_t, bool);
+void mpu_data_substract_err(mpuDataType *mpu_data_t, bool accel_only);
+void mpu_avg_err_divide(mpuDataType *, uint16_t);
+float *mpu_fifo_read_to_array(i2cBufferType *, mpuDataType *, float *, uint8_t, bool, bool);
+bool mpu_data_read_extract(i2cBufferType *, mpuDataType *);
+bool mpu_data_read_extract_accel(i2cBufferType *, mpuDataType *);
+bool mpu_data_sum_error(i2cBufferType *, mpuDataType *, bool);
+bool mpu_data_calibrate(i2cBufferType *, mpuDataType *, uint8_t);
+void mpu_data_reset(mpuDataType *);
+void mpu_avg_err_print(mpuDataType *);
 
 #endif // MPU6050_H
