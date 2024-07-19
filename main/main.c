@@ -63,10 +63,6 @@ void app_main(void)
     // deltatime = esp_timer_get_time() - deltatime;
     // ESP_LOGI(TAG, "Time elapsed: %llu ms", deltatime);
     // ESP_LOGI(TAG, "%llu us per batch", deltatime / N_SAMPLES);
-    for (size_t i = 0; i < N_SAMPLES; i++)
-    {
-        printf("%.5f, ", data_sampled_x[i]);
-    }
 
     // fft_prepare_window();
 
@@ -81,9 +77,18 @@ void app_main(void)
     fft_sort_magnitudes(fft_magnitudes_arr, MAGNITUDES_SIZE);
     ESP_LOGI(TAG, "Magnitudes sorted");
 
-    uint32_t n_msb_components = fft_percentile_n_components(50, MAGNITUDES_SIZE);
+    uint32_t n_msb_components = fft_percentile_n_components(90, MAGNITUDES_SIZE);
 
     fft_send_msb_components_over_uart(N_SAMPLES, n_msb_components);
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    uart_write_bytes(uart_num, "\xfa\xfa\xfa\xfa", 4);
+    for (size_t i = 0; i < N_SAMPLES; i++)
+    {
+        // printf("%.5f, ", data_sampled_x[i]);
+        uart_write_bytes(uart_num, (const char *)&data_sampled_x[i], sizeof(float));
+    }
 
     ESP_LOGI(TAG, "End Example.");
 

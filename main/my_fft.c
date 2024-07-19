@@ -161,16 +161,16 @@ uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len)
  * @brief Prepare uart buffer with the most significant fft components
  *
  * @param data_buffer: buffer that will be filled with components
- * @param n_msb_components: number of component groups to copy
+ * @param n_fft_components: number of component groups to copy
  * @param magnitudes: magnitudes array
  * @param fft_components: real and imaginary fft components
  */
-void fft_prepare_uart_data_buffer(uint8_t *data_buffer, uint32_t n_msb_components, indexed_float_type *magnitudes, float *fft_components)
+void fft_prepare_uart_data_buffer(uint8_t *data_buffer, uint32_t n_fft_components, indexed_float_type *magnitudes, float *fft_components)
 {
     uint32_t _index = 0;
     float index_as_float = 0.0;
 
-    for (uint32_t i = 0; i < n_msb_components; i++)
+    for (uint32_t i = 0; i < n_fft_components; i++)
     {
         if (i >= MAGNITUDES_SIZE)
         {
@@ -184,7 +184,7 @@ void fft_prepare_uart_data_buffer(uint8_t *data_buffer, uint32_t n_msb_component
         // index is converted to float for standardization reasons
         memcpy(&data_buffer[i * 3 * sizeof(float)], &index_as_float, sizeof(float));
         memcpy(&data_buffer[(i * 3 + 1) * sizeof(float)], &fft_components[_index * 2], sizeof(float) * 2);
-        ESP_LOGI(TAG, "i %.6f, ma %.6f, re %.6f, im %.6f", index_as_float, magnitudes[i].value, fft_components[_index * 2], fft_components[_index * 2 + 1]);
+        // ESP_LOGI(TAG, "i %.6f, ma %.6f, re %.6f, im %.6f", index_as_float, magnitudes[i].value, fft_components[_index * 2], fft_components[_index * 2 + 1]);
     }
 }
 
@@ -219,7 +219,9 @@ void fft_send_msb_components_over_uart(uint32_t n_samples, uint32_t n_msb_elemen
     uint8_t data_buffer[(sizeof(float) * 3) * n_msb_elements];
     fft_prepare_uart_data_buffer(data_buffer, n_msb_elements, fft_magnitudes_arr, fft_complex_arr);
 
-    fft_debug_uart_buffers(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
+    uart_send_fft_components(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
+
+    // fft_debug_uart_buffers(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
 }
 
 /**
