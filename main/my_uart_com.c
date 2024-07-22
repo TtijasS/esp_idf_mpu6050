@@ -34,12 +34,15 @@ void uart_send_accel_data(mpuDataType *mpu_data_t)
     uart_write_bytes(uart_num, "\t", 1);
 }
 
-void uart_send_fft_components(uint8_t *metadata_buffer, uint32_t metadata_size, uint8_t *data_buffer, uint32_t data_size)
+void uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *data_buffer, size_t data_size)
 {
+    // ESP_LOGI(TAG, "metadata_size: %u, data_size: %u", metadata_size, data_size);
     // Send metadata
-    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd", 4); // Start of transmission
+    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xfd", 5); // Start of transmission
     uart_write_bytes(uart_num, (const char *)metadata_buffer, metadata_size);
+    uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xff", 5); // Start of transmission
     // Send data
-    uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe", 4); // Start of transmission
+    uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xfe", 5); // Start of transmission
     uart_write_bytes(uart_num, (const char *)data_buffer, data_size);
+    uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xff", 5); // Start of transmission
 }

@@ -4,7 +4,7 @@ esp_err_t ret;
 
 __attribute__((aligned(16))) float fft_window_arr[N_SAMPLES];                      // Window coefficients
 __attribute__((aligned(16))) float fft_complex_arr[N_SAMPLES * 2];                 // Real and imaginary part of sampled data_sampled [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
-__attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[N_SAMPLES / 2]; // FFT output for plotting
+__attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[N_SAMPLES]; // FFT output for plotting
 
 void fft_init()
 {
@@ -207,19 +207,35 @@ void fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, u
  * @brief Send the first n components (magnitude, re, im) of DFFT calculation
  *
  * @param n_samples: number of samples taken during the vibration sampling process
- * @param n_msb_elements: number of most significant components to send over uart
+ * @param n_ms_elements: number of most significant components to send over uart
  */
-void fft_send_msb_components_over_uart(uint32_t n_samples, uint32_t n_msb_elements)
+void fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t n_ms_elements)
 {
     // Prepare metadata buffer to send sample size and number of msb components
     uint8_t metadata_buffer[sizeof(uint32_t) * 2];
-    fft_prepare_metadata_buffer(metadata_buffer, n_samples, n_msb_elements);
+    // fft_prepare_metadata_buffer(metadata_buffer, n_samples, n_ms_elements);
+    fft_prepare_metadata_buffer(metadata_buffer, 1024, 1024);
 
     // Prepare the data_buffer for n largest elements [magnitude, real, imaginary]
-    uint8_t data_buffer[(sizeof(float) * 3) * n_msb_elements];
-    fft_prepare_uart_data_buffer(data_buffer, n_msb_elements, fft_magnitudes_arr, fft_complex_arr);
+    uint8_t data_buffer[(sizeof(float) * 3) * n_ms_elements];
+    fft_prepare_uart_data_buffer(data_buffer, n_ms_elements, fft_magnitudes_arr, fft_complex_arr);
 
-    uart_send_fft_components(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
+    // Send data
+    // uart_send_fft_components(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
+
+    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xfd", 5); // Start of transmission
+    uart_write_bytes(uart_num, (const char *)metadata_buffer, 8);
+    uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xff", 5); // Start of transmission
+
+    uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xfe", 5); // Start of transmission
+    for (int i = 0; i < N_SAMPLES; i++)
+    {
+        float index_as_float = (float)i;
+        uart_write_bytes(uart_num, (const char *)&index_as_float, sizeof(float));
+        uart_write_bytes(uart_num, (const char *)&fft_complex_arr[i*2], sizeof(float));
+        uart_write_bytes(uart_num, (const char *)&fft_complex_arr[i*2 + 1], sizeof(float));
+    }
+    uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xff", 5); // Start of transmission
 
     // fft_debug_uart_buffers(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
 }
@@ -235,15 +251,16 @@ void fft_send_msb_components_over_uart(uint32_t n_samples, uint32_t n_msb_elemen
 void fft_debug_uart_buffers(uint8_t *metadata_buffer, uint32_t metadata_size, uint8_t *data_buffer, uint32_t data_size)
 {
     // construct back original values and print them
+    printf("\n");
     ESP_LOGI(TAG, "Metadata:");
     for (int i = 0; i < metadata_size / sizeof(uint32_t); i++)
     {
         uint32_t tmp_value;
         memcpy(&tmp_value, &metadata_buffer[i * sizeof(uint32_t)], sizeof(uint32_t));
-        printf("%ld, ", tmp_value);
+        printf("%lu, ", tmp_value);
     }
-    printf("\n");
 
+    printf("\n");
     ESP_LOGI(TAG, "index, re, im:");
     for (int i = 0; i < data_size / sizeof(float); i++)
     {

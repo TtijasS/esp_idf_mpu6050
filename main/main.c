@@ -67,28 +67,51 @@ void app_main(void)
     // fft_prepare_window();
 
     fft_prepare_complex_arr(data_sampled_x, fft_window_arr, fft_complex_arr, N_SAMPLES);
-    ESP_LOGI(TAG, "Window prepared and data merged to fft_components");
+    // ESP_LOGI(TAG, "Window prepared and data merged to fft_components");
 
     fft_calculate_re_im(fft_complex_arr, N_SAMPLES);
-    ESP_LOGI(TAG, "FFT calculated");
+    // ESP_LOGI(TAG, "FFT calculated");
 
-    fft_calculate_magnitudes(fft_magnitudes_arr, MAGNITUDES_SIZE);
+    fft_calculate_magnitudes(fft_magnitudes_arr, N_SAMPLES);
 
-    fft_sort_magnitudes(fft_magnitudes_arr, MAGNITUDES_SIZE);
-    ESP_LOGI(TAG, "Magnitudes sorted");
+    // fft_sort_magnitudes(fft_magnitudes_arr, N_SAMPLES);
+    // ESP_LOGI(TAG, "Magnitudes sorted");
 
-    uint32_t n_msb_components = fft_percentile_n_components(90, MAGNITUDES_SIZE);
+    uint32_t n_ms_components = fft_percentile_n_components(90, MAGNITUDES_SIZE);
 
-    fft_send_msb_components_over_uart(N_SAMPLES, n_msb_components);
+    // ESP_LOGI(TAG, "Sending components over UART.");
+    vTaskDelay(pdMS_TO_TICKS(10));
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    // fft_send_most_significant_components_over_uart(N_SAMPLES, n_ms_components);
 
-    uart_write_bytes(uart_num, "\xfa\xfa\xfa\xfa", 4);
+    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xfd", 5); // Start of transmission
+    uint32_t meta_samples = 1024;
+    uint32_t meta_components = 1024;
+    uart_write_bytes(uart_num, (const char *)&meta_samples, sizeof(uint32_t));
+    uart_write_bytes(uart_num, (const char *)&meta_components, sizeof(uint32_t));
+    uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xff", 5); // Start of transmission
+
+    uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xfe", 5); // Start of transmission
+    for (int i = 0; i < N_SAMPLES; i++)
+    {
+        float index_as_float = (float)fft_magnitudes_arr[i].index;
+        uart_write_bytes(uart_num, (const char *)&index_as_float, sizeof(float));
+        uart_write_bytes(uart_num, (const char *)&fft_magnitudes_arr[i].value, sizeof(float));
+        uart_write_bytes(uart_num, (const char *)&fft_complex_arr[i*2], sizeof(float));
+        uart_write_bytes(uart_num, (const char *)&fft_complex_arr[i*2 + 1], sizeof(float));
+    }
+    uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xff", 5); // Start of transmission
+
+    // ESP_LOGI(TAG, "Sending samples over UART.");
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    uart_write_bytes(uart_num, "\xfc\xfc\xfc\xfc\xfc", 5);
     for (size_t i = 0; i < N_SAMPLES; i++)
     {
         // printf("%.5f, ", data_sampled_x[i]);
         uart_write_bytes(uart_num, (const char *)&data_sampled_x[i], sizeof(float));
     }
+    uart_write_bytes(uart_num, "\xff\xfc\xfc\xfc\xff", 5);
 
     ESP_LOGI(TAG, "End Example.");
 

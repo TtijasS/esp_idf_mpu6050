@@ -8,6 +8,7 @@
 #include "driver/uart.h"
 #include "constants.h"
 #include "data_structs.h"
+#include "esp_log.h"
 
 // External declarations for constants and structs
 extern const uart_port_t uart_num;
@@ -17,6 +18,6 @@ extern const uart_config_t uart_config;
 // Function prototypes
 void uart_init();
 void uart_send_accel_data(mpuDataType *mpu_data_t);
-void uart_send_fft_components(uint8_t *metadata_buffer, uint32_t metadata_size, uint8_t *data_buffer, uint32_t data_size);
+void uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *data_buffer, size_t data_size);
 
 #endif // UART_COM_H
