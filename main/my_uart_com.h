@@ -18,6 +18,6 @@ extern const uart_config_t uart_config;
 // Function prototypes
 void uart_init();
 void uart_send_accel_data(mpuDataType *mpu_data_t);
-int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size);
+int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size);
 
 #endif // UART_COM_H

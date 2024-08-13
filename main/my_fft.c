@@ -170,10 +170,10 @@ uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len)
  * @return -3 index out of bounds, i > indices buffer size
  * @return -4 index out of bounds, i > complex buffer size
  */
-int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size, uint32_t n_fft_components, indexed_float_type *magnitudes, float *fft_components)
+int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size, uint32_t n_fft_components, indexed_float_type *indexed_magnitudes, float *fft_components)
 {
     const char *TAG = "PREP UART DATA";
-    if (indices_buffer == NULL || complex_data_buffer == NULL || magnitudes == NULL || fft_components == NULL)
+    if (indices_buffer == NULL || magnitudes_buffer == NULL || complex_data_buffer == NULL || indexed_magnitudes == NULL || fft_components == NULL)
     {
         ESP_LOGE(TAG, "NULL params passed");
         return -1;
@@ -197,8 +197,9 @@ int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, u
             return -4;
         }
 
-        uint32_t _index = magnitudes[i].index;
-        memcpy(&indices_buffer[i], &_index, sizeof(uint16_t));
+        uint32_t _index = indexed_magnitudes[i].index;
+        memcpy(&indices_buffer[i*sizeof(uint32_t)], &_index, sizeof(uint32_t));
+        memcpy(&magnitudes_buffer[i*sizeof(float)], &indexed_magnitudes[i].value, sizeof(float));
         memcpy(&complex_data_buffer[(i * 2) * sizeof(float)], &fft_components[_index * 2], sizeof(float) * 2);
         // ESP_LOGI(TAG, "i %d, ma %.6f, re %.6f, im %.6f", _index, magnitudes[i].value, fft_components[_index * 2], fft_components[_index * 2 + 1]);
     }
@@ -217,10 +218,8 @@ int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, u
  */
 int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, uint32_t n_components)
 {
-    const char *TAG = "PREP META BUF";
     if (metadata_buffer == NULL)
     {
-        ESP_LOGI(TAG, "Null params passed");
         return -1;
     }
     memcpy(&metadata_buffer[0], &n_samples, sizeof(uint32_t));
@@ -237,54 +236,98 @@ int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, ui
  * @return -1 failed to malloc metadata buffer
  * @return -2 failed to prepare metadata buffer
  * @return -3 failed to malloc indices buffer
- * @return -4 failed to malloc complex buffer
- * @return -5 failed to prepare indices or complex buffer
- * @return -6 failed to uart write buffers
+ * @return -4 failed to malloc magnitudes buffer
+ * @return -5 failed to malloc complex buffer
+ * @return -6 failed to prepare indices or complex buffer
+ * @return -7 failed to UART write buffers
+ * @return -8 failed to debug UART buffers
  */
 int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t n_ms_elements)
 {
+    uint8_t *metadata_buffer = NULL;
+    uint8_t *indices_buffer = NULL;
+    uint8_t *magnitudes_buffer = NULL;
+    uint8_t *complex_data_buffer = NULL;
+
+    int error_code;
     // Metadata buffer
     size_t metadata_size = 2 * sizeof(uint32_t);
-    uint8_t *metadata_buffer = (uint8_t *)malloc(metadata_size);
+    metadata_buffer = (uint8_t *)malloc(metadata_size);
     if (metadata_buffer == NULL)
     {
-        return -1;
+        ESP_LOGI(TAG, "-1");
+        error_code = -1;
+        goto cleanup;
     }
     
     if (fft_prepare_metadata_buffer(metadata_buffer, n_samples, n_ms_elements) != 0)
     {
-        return -2;
+        ESP_LOGI(TAG, "-2");
+        error_code = -2;
+        goto cleanup;
     }
 
     // Most significant indices buffer
-    size_t indices_size = n_ms_elements * sizeof(uint16_t);
-    uint8_t *indices_buffer = (float *)malloc(indices_size);
+    size_t indices_size = n_ms_elements * sizeof(uint32_t);
+    indices_buffer = (uint8_t *)malloc(indices_size);
     if (indices_buffer == NULL)
     {
-        return -3;
+        ESP_LOGI(TAG, "-3");
+        error_code = -3;
+        goto cleanup;
+    }
+
+    // Magnitudes
+    size_t magnitudes_size = n_ms_elements * sizeof(float);
+    magnitudes_buffer = (uint8_t *)malloc(magnitudes_size);
+    if(magnitudes_buffer == NULL)
+    {
+        ESP_LOGI(TAG, "-4");
+        error_code = -4;
+        goto cleanup;
     }
 
     // Complex data buffer
     size_t complex_size = 2 * n_ms_elements * sizeof(float);
-    uint8_t *complex_data_buffer = (float *)malloc(complex_size);
+    complex_data_buffer = (uint8_t *)malloc(complex_size);
     if (complex_data_buffer == NULL)
     {
-        return -4;
+        ESP_LOGI(TAG, "-5");
+        error_code = -5;
+        goto cleanup;
     }
 
-    if(fft_prepare_uart_data_buffer(indices_buffer, indices_size, complex_data_buffer, complex_size, n_ms_elements, fft_magnitudes_arr, fft_complex_arr) != 0)
+    if(fft_prepare_uart_data_buffer(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size, n_ms_elements, fft_magnitudes_arr, fft_complex_arr) != 0)
     {
-        return -5;
+        
+        ESP_LOGI(TAG, "-6");
+        error_code = -6;
+        goto cleanup;
     }
 
     // Send data
-    if (uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, complex_data_buffer, complex_size) != 0)
+    int err_c;
+    if ((err_c = uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size)) != 0)
     {
-        return -6;
+        ESP_LOGI(TAG, "-7; %d", err_c);
+        error_code = -7;
+        goto cleanup;
     }
 
-    fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, complex_data_buffer, complex_size);
+    if (fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size) != 0)
+    {
+        ESP_LOGI(TAG, "-8");
+        error_code = -8;
+        goto cleanup;
+    }
     return 0;
+
+cleanup:
+    if (metadata_buffer != NULL) free(metadata_buffer); 
+    if (indices_buffer != NULL) free(indices_buffer);
+    if (magnitudes_buffer != NULL) free(magnitudes_buffer);
+    if (complex_data_buffer != NULL) free(complex_data_buffer);
+    return error_code;
 }
 
 /**
@@ -297,14 +340,14 @@ int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t 
  * @return 0 OK
  * @return -1 NULL params passed
  */
-int uart_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size)
+int fft_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size)
 {
-    if (metadata_buffer == NULL || indices_buffer == NULL || complex_data_buffer == NULL)
+    if (metadata_buffer == NULL || indices_buffer == NULL || magnitudes_buffer == NULL || complex_data_buffer == NULL)
     {
         return -1;
     }
-    uint16_t index;
-    float im_re;
+    uint32_t tmp_u32t;
+    float tmp_f;
 
     // construct back original values and print them
     printf("\n");
@@ -318,16 +361,26 @@ int uart_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint
 
     printf("\n");
     ESP_LOGI(TAG, "indices:");
-    for (int i = 0; i < (indices_size / sizeof(uint16_t)); i++)
+    for (int i = 0; i < (indices_size / sizeof(uint32_t)); i++)
     {
-        memcpy(&index, &indices_buffer[i * sizeof(uint16_t)], sizeof(uint16_t));
-        printf("%u, ", index);
+        memcpy(&tmp_u32t, &indices_buffer[i * sizeof(uint32_t)], sizeof(uint32_t));
+        printf("%lu, ", tmp_u32t);
     }
+    
+    printf("\n");
+    ESP_LOGI(TAG, "Magnitudes:");
+    for (int i = 0; i < (magnitudes_size / sizeof(float)); i++)
+    {
+        memcpy(&tmp_f, &magnitudes_buffer[i * sizeof(float)], sizeof(float));
+        printf("%.4f, ", tmp_f);
+    }
+
     printf("\n");
     ESP_LOGI(TAG, "im, re, im, re, ...:");
     for (int i = 0; i < complex_size / sizeof(float); i++)
     {
-        memcpy(&im_re, &complex_data_buffer[i * sizeof(float)], sizeof(float));
-        printf("%.4f, ", im_re);
+        memcpy(&tmp_f, &complex_data_buffer[i * sizeof(float)], sizeof(float));
+        printf("%.4f, ", tmp_f);
     }
+    return 0;
 }

@@ -55,37 +55,45 @@ void uart_send_accel_data(mpuDataType *mpu_data_t)
  * @return -3 failed to write indices buffer
  * @return -4 failed to write complex data buffer
  */
-int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size)
+int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size)
 {
-    if (metadata_buffer == NULL || indices_buffer == NULL || complex_data_buffer == NULL)
+    if (metadata_buffer == NULL || indices_buffer == NULL || magnitudes_buffer == NULL || complex_data_buffer == NULL)
     {
         return -1;
     }
     const char* TAG = "SEND FFT";
     // ESP_LOGI(TAG, "metadata_size: %u, data_size: %u", metadata_size, data_size);
     // Send metadata
-    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xfd", 5); // Start of transmission
-    if (uart_write_bytes(uart_num, (const char *)metadata_buffer, metadata_size) != 0)
+    uart_write_bytes(uart_num, "\xfa\xfa\xfa\xfa\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)metadata_buffer, metadata_size) == -1)
     {
         return -2;
     }
-    uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xff", 5); // Start of transmission
+    uart_write_bytes(uart_num, "\xff\xfa\xfa\xfa\xfa", 5); // End of transmission
 
-    // Send complex data indices
-    uart_write_bytes(uart_num, "\xfc\xfc\xfc\xfc\xfc", 5); // Start of transmission
-    if (uart_write_bytes(uart_num, (const char *)indices_buffer, indices_size) != 0)
+    // Send magnitude indices
+    uart_write_bytes(uart_num, "\xfb\xfb\xfb\xfb\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)indices_buffer, indices_size) == -1)
     {
         return -3;
     }
-    uart_write_bytes(uart_num, "\xff\xfc\xfc\xfc\xff", 5); // Start of transmission
-    
-    // Send complex data
-    uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xfe", 5); // Start of transmission
-    if (uart_write_bytes(uart_num, (const char *)complex_data_buffer, complex_size) != 0)
+    uart_write_bytes(uart_num, "\xff\xfb\xfb\xfb\xfb", 5); // End of transmission
+
+    // Send magnitudes
+    uart_write_bytes(uart_num, "\xfc\xfc\xfc\xfc\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, magnitudes_buffer, magnitudes_size) == -1)
     {
         return -4;
     }
-    uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xff", 5); // Start of transmission
+    uart_write_bytes(uart_num, "\xff\xfc\xfc\xfc\xfc", 5); // End of transmission
+    
+    // Send complex data
+    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)complex_data_buffer, complex_size) == -1)
+    {
+        return -5;
+    }
+    uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xfd", 5); // End of transmission
     
     return 0;
 }
