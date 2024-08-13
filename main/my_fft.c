@@ -2,8 +2,8 @@
 
 esp_err_t ret;
 
-__attribute__((aligned(16))) float fft_window_arr[N_SAMPLES];                      // Window coefficients
-__attribute__((aligned(16))) float fft_complex_arr[N_SAMPLES * 2];                 // Real and imaginary part of sampled data_sampled [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
+__attribute__((aligned(16))) float fft_window_arr[N_SAMPLES];                  // Window coefficients
+__attribute__((aligned(16))) float fft_complex_arr[N_SAMPLES * 2];             // Real and imaginary part of sampled data_sampled [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
 __attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[N_SAMPLES]; // FFT output for plotting
 
 void fft_init()
@@ -45,8 +45,8 @@ void fft_prepare_complex_arr(float *sampled_data_arr, float *window_arr, float *
     for (int i = 0; i < arr_len; i++)
     {
         // [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
-        complex_arr[2 * i] = sampled_data_arr[i];// * window_arr[i]; // Real part (@ i-th index)
-        complex_arr[2 * i + 1] = 0;                               // Imaginary part (@ i + 1 index)
+        complex_arr[2 * i] = sampled_data_arr[i]; // * window_arr[i]; // Real part (@ i-th index)
+        complex_arr[2 * i + 1] = 0;               // Imaginary part (@ i + 1 index)
     }
 }
 
@@ -148,7 +148,7 @@ int compare_indexed_float_type_descending(const void *a, const void *b)
  * If we have an array of size 100, then 95th percentile index is i = 95,
  * therefore in a sorted array first (100-95)=5 elements are 95th percentile.
  *
- * @param percentile: float < 100
+ * @param percentile: 0 <= float < 100
  * @param arr_len: array length
  * @return uint32_t
  */
@@ -164,28 +164,45 @@ uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len)
  * @param n_fft_components: number of component groups to copy
  * @param magnitudes: magnitudes array
  * @param fft_components: real and imaginary fft components
+ * @return 0 OK
+ * @return -1 NULL params passed
+ * @return -2 index out of bounds, i > magnitudes array size
+ * @return -3 index out of bounds, i > indices buffer size
+ * @return -4 index out of bounds, i > complex buffer size
  */
-void fft_prepare_uart_data_buffer(uint8_t *data_buffer, uint32_t n_fft_components, indexed_float_type *magnitudes, float *fft_components)
+int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size, uint32_t n_fft_components, indexed_float_type *magnitudes, float *fft_components)
 {
-    uint32_t _index = 0;
-    float index_as_float = 0.0;
+    const char *TAG = "PREP UART DATA";
+    if (indices_buffer == NULL || complex_data_buffer == NULL || magnitudes == NULL || fft_components == NULL)
+    {
+        ESP_LOGE(TAG, "NULL params passed");
+        return -1;
+    }
 
     for (uint32_t i = 0; i < n_fft_components; i++)
     {
-        if (i >= MAGNITUDES_SIZE)
+        if (i > MAGNITUDES_SIZE)
         {
-            ESP_LOGE(TAG, "Index out of bounds in fft_prepare_uart_data_buffer");
-            break;
+            ESP_LOGE(TAG, "i > magnitudes size");
+            return -2;
         }
-        _index = magnitudes[i].index;
-        index_as_float = (float)_index;
+        if (i > indices_size)
+        {
+            ESP_LOGE(TAG, "i > indices buffer size");
+            return -3;
+        }
+        if (i * 2 > complex_size)
+        {
+            ESP_LOGE(TAG, "i > complex buffer size");
+            return -4;
+        }
 
-        // Copy [index, real, imaginary] parts to data buffer
-        // index is converted to float for standardization reasons
-        memcpy(&data_buffer[i * 3 * sizeof(float)], &index_as_float, sizeof(float));
-        memcpy(&data_buffer[(i * 3 + 1) * sizeof(float)], &fft_components[_index * 2], sizeof(float) * 2);
-        // ESP_LOGI(TAG, "i %.6f, ma %.6f, re %.6f, im %.6f", index_as_float, magnitudes[i].value, fft_components[_index * 2], fft_components[_index * 2 + 1]);
+        uint32_t _index = magnitudes[i].index;
+        memcpy(&indices_buffer[i], &_index, sizeof(uint16_t));
+        memcpy(&complex_data_buffer[(i * 2) * sizeof(float)], &fft_components[_index * 2], sizeof(float) * 2);
+        // ESP_LOGI(TAG, "i %d, ma %.6f, re %.6f, im %.6f", _index, magnitudes[i].value, fft_components[_index * 2], fft_components[_index * 2 + 1]);
     }
+    return 0;
 }
 
 /**
@@ -196,11 +213,19 @@ void fft_prepare_uart_data_buffer(uint8_t *data_buffer, uint32_t n_fft_component
  * @param metadata_buffer: pointer to buffer array that will be prepared
  * @param n_samples: number of samples used in fft calculation
  * @param n_components: number of most significant components that will get sent over uart
+ * @return 0 OK
  */
-void fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, uint32_t n_components)
+int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, uint32_t n_components)
 {
+    const char *TAG = "PREP META BUF";
+    if (metadata_buffer == NULL)
+    {
+        ESP_LOGI(TAG, "Null params passed");
+        return -1;
+    }
     memcpy(&metadata_buffer[0], &n_samples, sizeof(uint32_t));
     memcpy(&metadata_buffer[sizeof(uint32_t)], &n_components, sizeof(uint32_t));
+    return 0;
 }
 
 /**
@@ -208,36 +233,58 @@ void fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, u
  *
  * @param n_samples: number of samples taken during the vibration sampling process
  * @param n_ms_elements: number of most significant components to send over uart
+ * @return 0 OK
+ * @return -1 failed to malloc metadata buffer
+ * @return -2 failed to prepare metadata buffer
+ * @return -3 failed to malloc indices buffer
+ * @return -4 failed to malloc complex buffer
+ * @return -5 failed to prepare indices or complex buffer
+ * @return -6 failed to uart write buffers
  */
-void fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t n_ms_elements)
+int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t n_ms_elements)
 {
-    // Prepare metadata buffer to send sample size and number of msb components
-    uint8_t metadata_buffer[sizeof(uint32_t) * 2];
-    // fft_prepare_metadata_buffer(metadata_buffer, n_samples, n_ms_elements);
-    fft_prepare_metadata_buffer(metadata_buffer, 1024, 1024);
+    // Metadata buffer
+    size_t metadata_size = 2 * sizeof(uint32_t);
+    uint8_t *metadata_buffer = (uint8_t *)malloc(metadata_size);
+    if (metadata_buffer == NULL)
+    {
+        return -1;
+    }
+    
+    if (fft_prepare_metadata_buffer(metadata_buffer, n_samples, n_ms_elements) != 0)
+    {
+        return -2;
+    }
 
-    // Prepare the data_buffer for n largest elements [magnitude, real, imaginary]
-    uint8_t data_buffer[(sizeof(float) * 3) * n_ms_elements];
-    fft_prepare_uart_data_buffer(data_buffer, n_ms_elements, fft_magnitudes_arr, fft_complex_arr);
+    // Most significant indices buffer
+    size_t indices_size = n_ms_elements * sizeof(uint16_t);
+    uint8_t *indices_buffer = (float *)malloc(indices_size);
+    if (indices_buffer == NULL)
+    {
+        return -3;
+    }
+
+    // Complex data buffer
+    size_t complex_size = 2 * n_ms_elements * sizeof(float);
+    uint8_t *complex_data_buffer = (float *)malloc(complex_size);
+    if (complex_data_buffer == NULL)
+    {
+        return -4;
+    }
+
+    if(fft_prepare_uart_data_buffer(indices_buffer, indices_size, complex_data_buffer, complex_size, n_ms_elements, fft_magnitudes_arr, fft_complex_arr) != 0)
+    {
+        return -5;
+    }
 
     // Send data
-    // uart_send_fft_components(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
-
-    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xfd", 5); // Start of transmission
-    uart_write_bytes(uart_num, (const char *)metadata_buffer, 8);
-    uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xff", 5); // Start of transmission
-
-    uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xfe", 5); // Start of transmission
-    for (int i = 0; i < N_SAMPLES; i++)
+    if (uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, complex_data_buffer, complex_size) != 0)
     {
-        float index_as_float = (float)i;
-        uart_write_bytes(uart_num, (const char *)&index_as_float, sizeof(float));
-        uart_write_bytes(uart_num, (const char *)&fft_complex_arr[i*2], sizeof(float));
-        uart_write_bytes(uart_num, (const char *)&fft_complex_arr[i*2 + 1], sizeof(float));
+        return -6;
     }
-    uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xff", 5); // Start of transmission
 
-    // fft_debug_uart_buffers(metadata_buffer, sizeof(metadata_buffer), data_buffer, sizeof(data_buffer));
+    fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, complex_data_buffer, complex_size);
+    return 0;
 }
 
 /**
@@ -247,9 +294,18 @@ void fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t
  * @param metadata_size: size of the metadata buffer
  * @param data_buffer: buffer with data float values
  * @param data_size: size of the data buffer
+ * @return 0 OK
+ * @return -1 NULL params passed
  */
-void fft_debug_uart_buffers(uint8_t *metadata_buffer, uint32_t metadata_size, uint8_t *data_buffer, uint32_t data_size)
+int uart_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size)
 {
+    if (metadata_buffer == NULL || indices_buffer == NULL || complex_data_buffer == NULL)
+    {
+        return -1;
+    }
+    uint16_t index;
+    float im_re;
+
     // construct back original values and print them
     printf("\n");
     ESP_LOGI(TAG, "Metadata:");
@@ -261,11 +317,17 @@ void fft_debug_uart_buffers(uint8_t *metadata_buffer, uint32_t metadata_size, ui
     }
 
     printf("\n");
-    ESP_LOGI(TAG, "index, re, im:");
-    for (int i = 0; i < data_size / sizeof(float); i++)
+    ESP_LOGI(TAG, "indices:");
+    for (int i = 0; i < (indices_size / sizeof(uint16_t)); i++)
     {
-        float tmp_value = 0.0;
-        memcpy(&tmp_value, &data_buffer[i * sizeof(float)], sizeof(float));
-        printf("%.4f, ", tmp_value);
+        memcpy(&index, &indices_buffer[i * sizeof(uint16_t)], sizeof(uint16_t));
+        printf("%u, ", index);
+    }
+    printf("\n");
+    ESP_LOGI(TAG, "im, re, im, re, ...:");
+    for (int i = 0; i < complex_size / sizeof(float); i++)
+    {
+        memcpy(&im_re, &complex_data_buffer[i * sizeof(float)], sizeof(float));
+        printf("%.4f, ", im_re);
     }
 }

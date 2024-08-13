@@ -15,7 +15,7 @@
 
 	#define N_SAMPLES 1024					  // Number of samples to run FFT on
 	#define FFT_COMPONENTS_SIZE N_SAMPLES * 2 // Size of ffc components array size
-	#define MAGNITUDES_SIZE N_SAMPLES / 2	  // size of magnitudes struct array size
+	#define MAGNITUDES_SIZE (N_SAMPLES)	  // size of magnitudes struct array size
 
 	// I2C CONFIGURATION
 	#define I2C_SCL_IO CONFIG_I2C_MASTER_SCL // GPIO number used for I2C master clock
