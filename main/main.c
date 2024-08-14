@@ -71,27 +71,26 @@ void app_main(void)
     fft_calculate_re_im(fft_complex_arr, N_SAMPLES);
     // // ESP_LOGI(TAG, "FFT calculated");
 
-    fft_calculate_magnitudes(fft_magnitudes_arr, N_SAMPLES);
+    fft_calculate_magnitudes(fft_magnitudes_arr, N_SAMPLES / 2);
 
-    fft_sort_magnitudes(fft_magnitudes_arr, N_SAMPLES);
+    fft_sort_magnitudes(fft_magnitudes_arr, (uint32_t)(N_SAMPLES / 2));
     // ESP_LOGI(TAG, "Magnitudes sorted");
 
-    uint32_t n_ms_components = fft_percentile_n_components(0, MAGNITUDES_SIZE);
+    uint32_t n_ms_components = fft_percentile_n_components(0, N_SAMPLES);
 
     ESP_LOGI(TAG, "ms components: %lu", n_ms_components);
-
 
     // ESP_LOGI(TAG, "Sending components over UART.");
     int err_code = fft_send_most_significant_components_over_uart(N_SAMPLES, n_ms_components);
     // ESP_LOGI(TAG, "err_code = %d", err_code);
 
-    // uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xff", 5);
-    // for (size_t i = 0; i < N_SAMPLES; i++)
-    // {
-    //     printf("%.4f, ", data_sampled_x[i]);
-    //     // uart_write_bytes(uart_num, (const char *)&data_sampled_x[i], sizeof(float));
-    // }
-    // uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xfe", 5);
+    uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xff", 5);
+    for (size_t i = 0; i < N_SAMPLES; i++)
+    {
+        // printf("%.4f, ", data_sampled_x[i]);
+        uart_write_bytes(uart_num, (const char *)&data_sampled_x[i], sizeof(float));
+    }
+    uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xfe", 5);
 
     ESP_LOGI(TAG, "End Example.");
 

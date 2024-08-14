@@ -71,7 +71,7 @@ int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uin
     }
     uart_write_bytes(uart_num, "\xff\xfa\xfa\xfa\xfa", 5); // End of transmission
 
-    // Send magnitude indices
+    // Send indices
     uart_write_bytes(uart_num, "\xfb\xfb\xfb\xfb\xff", 5); // Start of transmission
     if (uart_write_bytes(uart_num, (const char *)indices_buffer, indices_size) == -1)
     {
