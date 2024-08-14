@@ -90,7 +90,7 @@ void fft_calculate_magnitudes(indexed_float_type *indexed_magnitudes_arr, uint32
     for (int i = 0; i < arr_len; i++)
     {
         indexed_magnitudes_arr[i].index = i;
-        indexed_magnitudes_arr[i].value = sqrtf((fft_complex_arr[i * 2] * fft_complex_arr[i * 2]) + (fft_complex_arr[i * 2 + 1] * fft_complex_arr[i * 2 + 1]) / N_SAMPLES);
+        indexed_magnitudes_arr[i].value = sqrtf(((fft_complex_arr[i * 2] * fft_complex_arr[i * 2]) + (fft_complex_arr[i * 2 + 1] * fft_complex_arr[i * 2 + 1])) / N_SAMPLES);
     }
 }
 
@@ -181,27 +181,35 @@ int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, u
 
     for (uint32_t i = 0; i < n_fft_components; i++)
     {
-        if (i > MAGNITUDES_SIZE)
+        if (i >= magnitudes_size)
         {
-            ESP_LOGE(TAG, "i > magnitudes size");
+            ESP_LOGE(TAG, "i >= magnitudes size");
             return -2;
         }
-        if (i > indices_size)
+        if (i >= indices_size)
         {
-            ESP_LOGE(TAG, "i > indices buffer size");
+            ESP_LOGE(TAG, "i >= indices buffer size");
             return -3;
         }
-        if (i * 2 > complex_size)
+        if ((i * 2 + 1) >= complex_size)
         {
-            ESP_LOGE(TAG, "i > complex buffer size");
+            ESP_LOGE(TAG, "i >= complex buffer size");
             return -4;
         }
 
+        // indexed magnitudes are sorted by the value
+        // Indices are used for accessing the re and im components
         uint32_t _index = indexed_magnitudes[i].index;
-        memcpy(&indices_buffer[i*sizeof(uint32_t)], &_index, sizeof(uint32_t));
-        memcpy(&magnitudes_buffer[i*sizeof(float)], &indexed_magnitudes[i].value, sizeof(float));
-        memcpy(&complex_data_buffer[(i * 2) * sizeof(float)], &fft_components[_index * 2], sizeof(float) * 2);
-        // ESP_LOGI(TAG, "i %d, ma %.6f, re %.6f, im %.6f", _index, magnitudes[i].value, fft_components[_index * 2], fft_components[_index * 2 + 1]);
+        float _magnitude = indexed_magnitudes[i].value;
+        // fft_complex_arr = [re[i], im[i+1], re[i*2],im[i*2+1],...]
+        float _re = fft_complex_arr[_index * 2];
+        float _im = fft_complex_arr[_index * 2 + 1];
+
+        memcpy(&indices_buffer[i * sizeof(uint32_t)], &_index, sizeof(uint32_t));
+        memcpy(&magnitudes_buffer[i * sizeof(float)], &_magnitude, sizeof(float));
+        memcpy(&complex_data_buffer[(i * 2) * sizeof(float)], &_re, sizeof(float));
+        memcpy(&complex_data_buffer[(i * 2 + 1) * sizeof(float)], &_im, sizeof(float));
+        ESP_LOGI(TAG, "i %lu, ma %.4f, re %.4f, im %.4f", _index, _magnitude, _re, _im);
     }
     return 0;
 }
@@ -218,10 +226,12 @@ int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, u
  */
 int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, uint32_t n_components)
 {
+    const char *TAG = "META PREP";
     if (metadata_buffer == NULL)
     {
         return -1;
     }
+    ESP_LOGE(TAG, "n_samples: %lu, n_components: %lu", n_samples, n_components);
     memcpy(&metadata_buffer[0], &n_samples, sizeof(uint32_t));
     memcpy(&metadata_buffer[sizeof(uint32_t)], &n_components, sizeof(uint32_t));
     return 0;
@@ -259,7 +269,7 @@ int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t 
         error_code = -1;
         goto cleanup;
     }
-    
+
     if (fft_prepare_metadata_buffer(metadata_buffer, n_samples, n_ms_elements) != 0)
     {
         ESP_LOGI(TAG, "-2");
@@ -280,7 +290,7 @@ int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t 
     // Magnitudes
     size_t magnitudes_size = n_ms_elements * sizeof(float);
     magnitudes_buffer = (uint8_t *)malloc(magnitudes_size);
-    if(magnitudes_buffer == NULL)
+    if (magnitudes_buffer == NULL)
     {
         ESP_LOGI(TAG, "-4");
         error_code = -4;
@@ -297,9 +307,9 @@ int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t 
         goto cleanup;
     }
 
-    if(fft_prepare_uart_data_buffer(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size, n_ms_elements, fft_magnitudes_arr, fft_complex_arr) != 0)
+    if (fft_prepare_uart_data_buffer(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size, n_ms_elements, fft_magnitudes_arr, fft_complex_arr) != 0)
     {
-        
+
         ESP_LOGI(TAG, "-6");
         error_code = -6;
         goto cleanup;
@@ -314,19 +324,23 @@ int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t 
         goto cleanup;
     }
 
-    if (fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size) != 0)
-    {
-        ESP_LOGI(TAG, "-8");
-        error_code = -8;
-        goto cleanup;
-    }
+    // if (fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size) != 0)
+    // {
+    //     ESP_LOGI(TAG, "-8");
+    //     error_code = -8;
+    //     goto cleanup;
+    // }
     return 0;
 
 cleanup:
-    if (metadata_buffer != NULL) free(metadata_buffer); 
-    if (indices_buffer != NULL) free(indices_buffer);
-    if (magnitudes_buffer != NULL) free(magnitudes_buffer);
-    if (complex_data_buffer != NULL) free(complex_data_buffer);
+    if (metadata_buffer != NULL)
+        free(metadata_buffer);
+    if (indices_buffer != NULL)
+        free(indices_buffer);
+    if (magnitudes_buffer != NULL)
+        free(magnitudes_buffer);
+    if (complex_data_buffer != NULL)
+        free(complex_data_buffer);
     return error_code;
 }
 
@@ -366,7 +380,7 @@ int fft_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8
         memcpy(&tmp_u32t, &indices_buffer[i * sizeof(uint32_t)], sizeof(uint32_t));
         printf("%lu, ", tmp_u32t);
     }
-    
+
     printf("\n");
     ESP_LOGI(TAG, "Magnitudes:");
     for (int i = 0; i < (magnitudes_size / sizeof(float)); i++)

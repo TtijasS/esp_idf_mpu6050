@@ -14,7 +14,7 @@ extern esp_err_t ret;
 
 extern __attribute__((aligned(16))) float fft_window_arr[N_SAMPLES];					  // Window coefficients
 extern __attribute__((aligned(16))) float fft_complex_arr[N_SAMPLES * 2];				  // Real and imaginary part of sampled data [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
-extern __attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[MAGNITUDES_SIZE]; // FFT output for magnitudes
+extern __attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[N_SAMPLES]; // FFT output for magnitudes
 
 void fft_init();
 void fft_prepare_window();
