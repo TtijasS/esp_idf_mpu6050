@@ -16,8 +16,18 @@
 #include "my_uart_com.h"
 #include "my_fft.h"
 
+extern TaskHandle_t notif_init;
+extern TaskHandle_t notif_mpu_sampling;
+extern TaskHandle_t notif_fft_calculation;
+extern TaskHandle_t notif_send_fft_components;
+extern TaskHandle_t notif_send_data_samples;
 
+extern float data_sampled_x[N_SAMPLES];
 
-
+void task_initialization(void *params);
+void task_mpu6050_data_sampling(void *params);
+void task_fft_calculation(void *params);
+void task_fft_send_components(void *params);
+void task_send_data_samples(void *params);
 
 #endif // PROGRAM_TASKS_H

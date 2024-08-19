@@ -4,11 +4,12 @@ esp_err_t ret;
 
 __attribute__((aligned(16))) float fft_window_arr[N_SAMPLES];                  // Window coefficients
 __attribute__((aligned(16))) float fft_complex_arr[N_SAMPLES * 2];             // Real and imaginary part of sampled data_sampled [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
-__attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[N_SAMPLES]; // FFT output for plotting
+__attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[MAGNITUDES_SIZE]; // FFT output for plotting
 
 void fft_init()
 {
     ret = dsps_fft2r_init_fc32(NULL, N_SAMPLES);
+    
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "Error in FFT init: %s", esp_err_to_name(ret));
@@ -259,7 +260,7 @@ int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t 
     uint8_t *magnitudes_buffer = NULL;
     uint8_t *complex_data_buffer = NULL;
 
-    int error_code;
+    int error_code = 0;
     // Metadata buffer
     size_t metadata_size = 2 * sizeof(uint32_t);
     metadata_buffer = (uint8_t *)malloc(metadata_size);
@@ -330,9 +331,7 @@ int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t 
     //     error_code = -8;
     //     goto cleanup;
     // }
-    return 0;
-
-cleanup:
+    cleanup:
     if (metadata_buffer != NULL)
         free(metadata_buffer);
     if (indices_buffer != NULL)
