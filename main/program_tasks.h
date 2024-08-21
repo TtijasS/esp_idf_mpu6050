@@ -17,7 +17,7 @@
 #include "my_fft.h"
 
 extern TaskHandle_t notif_init;
-extern TaskHandle_t notif_mpu_sampling;
+extern TaskHandle_t notif_data_sampling;
 extern TaskHandle_t notif_fft_calculation;
 extern TaskHandle_t notif_send_fft_components;
 extern TaskHandle_t notif_send_data_samples;

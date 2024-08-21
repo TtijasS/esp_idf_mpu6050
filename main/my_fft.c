@@ -1,15 +1,9 @@
 #include "my_fft.h"
 
-esp_err_t ret;
-
-__attribute__((aligned(16))) float fft_window_arr[N_SAMPLES];                  // Window coefficients
-__attribute__((aligned(16))) float fft_complex_arr[N_SAMPLES * 2];             // Real and imaginary part of sampled data_sampled [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
-__attribute__((aligned(16))) indexed_float_type fft_magnitudes_arr[MAGNITUDES_SIZE]; // FFT output for plotting
-
 void fft_init()
 {
-    ret = dsps_fft2r_init_fc32(NULL, N_SAMPLES);
-    
+    esp_err_t ret = dsps_fft2r_init_fc32(NULL, N_SAMPLES);
+
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "Error in FFT init: %s", esp_err_to_name(ret));
@@ -21,10 +15,12 @@ void fft_init()
 /**
  * @brief Prepare window before constructing complex array
  *
+ * @param window_arr pointer to the window array
+ *
  */
-void fft_prepare_window()
+void fft_prepare_window(float *window_arr)
 {
-    dsps_wind_hann_f32(fft_window_arr, N_SAMPLES);
+    dsps_wind_hann_f32(window_arr, N_SAMPLES);
 }
 
 /**
@@ -35,14 +31,14 @@ void fft_prepare_window()
  * @param complex_arr: array that stores real and imaginary parts of the signal
  * @param arr_len: length of the sampled_data_arr
  */
-void fft_prepare_complex_arr(float *sampled_data_arr, float *window_arr, float *complex_arr, uint32_t arr_len)
+void fft_prepare_complex_arr(float *sampled_data_arr, float *complex_arr, uint32_t arr_len)
 {
-    if (sampled_data_arr == NULL || window_arr == NULL || complex_arr == NULL)
+    if (sampled_data_arr == NULL || complex_arr == NULL)
     {
         ESP_LOGE(TAG, "Null pointer error in fft_prepare_complex_arr");
         return;
     }
-    // Prepare fft_components array
+    // Prepare fft_complex_arr array
     for (int i = 0; i < arr_len; i++)
     {
         // [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
@@ -55,15 +51,18 @@ void fft_prepare_complex_arr(float *sampled_data_arr, float *window_arr, float *
  * @brief Run DFFT and calculate real and imaginary componenty of the signal
  *
  * Calculate re and im parts of the sampled signal
- * and store results into fft_components array of length N_SAMPLES*2
+ * and store results into fft_complex_arr array of length N_SAMPLES*2
+ *
+ * @param complex_arr fft complex components array
+ * @param n_samples number of data samples (should be half the size of the complex arr)
  */
-void fft_calculate_re_im(float *complex_arr, uint32_t arr_len)
+void fft_calculate_re_im(float *complex_arr, uint32_t n_samples)
 {
-    ESP_ERROR_CHECK(dsps_fft2r_fc32(complex_arr, arr_len));
+    ESP_ERROR_CHECK(dsps_fft2r_fc32(complex_arr, n_samples));
 
-    ESP_ERROR_CHECK(dsps_bit_rev_fc32(complex_arr, arr_len));
+    ESP_ERROR_CHECK(dsps_bit_rev_fc32(complex_arr, n_samples));
 
-    ESP_ERROR_CHECK(dsps_cplx2reC_fc32(complex_arr, arr_len));
+    ESP_ERROR_CHECK(dsps_cplx2reC_fc32(complex_arr, n_samples));
 }
 
 /**
@@ -71,10 +70,11 @@ void fft_calculate_re_im(float *complex_arr, uint32_t arr_len)
  *
  * First run fft_calculate_im_re, then convert components to magnitudes (sqrtf scale)
  *
- * @param magnitudes_indexed: pointer to array of structs with index and magnitude value
- * @param arr_len: length of magnitudes_indexed array
+ * @param magnitudes_indexed array of structs with index and magnitude value
+ * @param fft_complex_arr array of fft complex components
+ * @param magnitudes_size size of magnitudes array (should be hald of the number of data samples)
  */
-void fft_calculate_magnitudes(indexed_float_type *indexed_magnitudes_arr, uint32_t arr_len)
+void fft_calculate_magnitudes(indexed_float_type *indexed_magnitudes_arr, float *fft_complex_arr, uint32_t magnitudes_size)
 {
     if (indexed_magnitudes_arr == NULL)
     {
@@ -82,13 +82,13 @@ void fft_calculate_magnitudes(indexed_float_type *indexed_magnitudes_arr, uint32
         return;
     }
 
-    if (arr_len == 0)
+    if (magnitudes_size == 0)
     {
         ESP_LOGE(TAG, "Array length is zero in fft_calculate_magnitudes");
         return;
     }
 
-    for (int i = 0; i < arr_len; i++)
+    for (int i = 0; i < magnitudes_size; i++)
     {
         indexed_magnitudes_arr[i].index = i;
         indexed_magnitudes_arr[i].value = sqrtf(((fft_complex_arr[i * 2] * fft_complex_arr[i * 2]) + (fft_complex_arr[i * 2 + 1] * fft_complex_arr[i * 2 + 1])) / N_SAMPLES);
@@ -96,14 +96,14 @@ void fft_calculate_magnitudes(indexed_float_type *indexed_magnitudes_arr, uint32
 }
 
 /**
- * @brief Sort the base_array of indexed_float_type in descending order.
+ * @brief Sort the indexed_mangitudes of indexed_float_type in descending order.
  *
- * @param base_array: The array you wish to sort (magnitudes_indexed)
- * @param arr_len: length of the base_array
+ * @param indexed_mangitudes array that will get sorted
+ * @param magnitudes_size size of the array that will get sorted
  */
-void fft_sort_magnitudes(indexed_float_type *base_array, uint32_t arr_len)
+void fft_sort_magnitudes(indexed_float_type *indexed_mangitudes, uint32_t magnitudes_size)
 {
-    qsort(base_array, arr_len, sizeof(indexed_float_type), compare_indexed_float_type_descending);
+    qsort(indexed_mangitudes, magnitudes_size, sizeof(indexed_float_type), compare_indexed_float_type_descending);
 }
 
 /**
@@ -112,18 +112,19 @@ void fft_sort_magnitudes(indexed_float_type *base_array, uint32_t arr_len)
  * First calculate real and imaginary coponents, then run fft_calculate_magnitudes.
  * After that you can plot magnitudes as a simple asci char plot.
  *
- * @param arr_len: length of magnitudes_indexed array
+ * @param indexed_magnitudes indexed magnitudes array
+ * @param arr_len: length of indexed magnitudes array
  * @param min: plot scale min
  * @param max: plot scale max
  */
 
-void fft_plot_magnitudes(uint32_t arr_len, int min, int max)
+void fft_plot_magnitudes(indexed_float_type *indexed_magnitudes, uint32_t arr_len, int min, int max)
 {
     // construct tmp magnitudes float array
-    float magnitudes[arr_len];
+    float *magnitudes = (float *)malloc(arr_len * sizeof(float));
     for (uint32_t i = 0; i < arr_len; i++)
     {
-        magnitudes[i] = fft_magnitudes_arr[i].value;
+        magnitudes[i] = indexed_magnitudes[i].value;
     }
 
     dsps_view(magnitudes, arr_len, 64, 16, min, max, '|');
@@ -159,63 +160,6 @@ uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len)
 }
 
 /**
- * @brief Prepare uart buffer with the most significant fft components
- *
- * @param data_buffer: buffer that will be filled with components
- * @param n_fft_components: number of component groups to copy
- * @param magnitudes: magnitudes array
- * @param fft_components: real and imaginary fft components
- * @return 0 OK
- * @return -1 NULL params passed
- * @return -2 index out of bounds, i > magnitudes array size
- * @return -3 index out of bounds, i > indices buffer size
- * @return -4 index out of bounds, i > complex buffer size
- */
-int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size, uint32_t n_fft_components, indexed_float_type *indexed_magnitudes, float *fft_components)
-{
-    const char *TAG = "PREP UART DATA";
-    if (indices_buffer == NULL || magnitudes_buffer == NULL || complex_data_buffer == NULL || indexed_magnitudes == NULL || fft_components == NULL)
-    {
-        ESP_LOGE(TAG, "NULL params passed");
-        return -1;
-    }
-
-    for (uint32_t i = 0; i < n_fft_components; i++)
-    {
-        if (i >= magnitudes_size)
-        {
-            ESP_LOGE(TAG, "i >= magnitudes size");
-            return -2;
-        }
-        if (i >= indices_size)
-        {
-            ESP_LOGE(TAG, "i >= indices buffer size");
-            return -3;
-        }
-        if ((i * 2 + 1) >= complex_size)
-        {
-            ESP_LOGE(TAG, "i >= complex buffer size");
-            return -4;
-        }
-
-        // indexed magnitudes are sorted by the value
-        // Indices are used for accessing the re and im components
-        uint32_t _index = indexed_magnitudes[i].index;
-        float _magnitude = indexed_magnitudes[i].value;
-        // fft_complex_arr = [re[i], im[i+1], re[i*2],im[i*2+1],...]
-        float _re = fft_complex_arr[_index * 2];
-        float _im = fft_complex_arr[_index * 2 + 1];
-
-        memcpy(&indices_buffer[i * sizeof(uint32_t)], &_index, sizeof(uint32_t));
-        memcpy(&magnitudes_buffer[i * sizeof(float)], &_magnitude, sizeof(float));
-        memcpy(&complex_data_buffer[(i * 2) * sizeof(float)], &_re, sizeof(float));
-        memcpy(&complex_data_buffer[(i * 2 + 1) * sizeof(float)], &_im, sizeof(float));
-        ESP_LOGI(TAG, "i %lu, ma %.4f, re %.4f, im %.4f", _index, _magnitude, _re, _im);
-    }
-    return 0;
-}
-
-/**
  * @brief Prepare metadata that will be sent over uart
  *
  * We need send the number of samples that were used in fft calculation and how many most significant components were sent over.
@@ -224,25 +168,106 @@ int fft_prepare_uart_data_buffer(uint8_t *indices_buffer, size_t indices_size, u
  * @param n_samples: number of samples used in fft calculation
  * @param n_components: number of most significant components that will get sent over uart
  * @return 0 OK
+ * @return -1 null pointer passed
+ * @return -2 metadata buffer size too small
  */
-int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, uint32_t n_components)
+int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, size_t metadata_size, uint32_t n_samples, uint32_t n_components)
 {
     const char *TAG = "META PREP";
+    esp_log_level_set(TAG, ESP_LOG_INFO);
+
     if (metadata_buffer == NULL)
     {
         return -1;
     }
-    ESP_LOGE(TAG, "n_samples: %lu, n_components: %lu", n_samples, n_components);
+    if (metadata_size < (2 * sizeof(uint32_t)))
+    {
+        return -2;
+    }
     memcpy(&metadata_buffer[0], &n_samples, sizeof(uint32_t));
     memcpy(&metadata_buffer[sizeof(uint32_t)], &n_components, sizeof(uint32_t));
     return 0;
 }
 
 /**
+ * @brief Prepare most significant magnitudes and their indices to send over uart
+ *
+ * @param indices_buffer uart buffer for indices
+ * @param indices_size size of indices buffer
+ * @param magnitudes_buffer uart buffer for magnitudes
+ * @param magnitudes_size size of magnitudes buffer
+ * @param n_ms_components number of fft components
+ * @return 0 OK
+ * @return -1 NULL pointers passed
+ * @return -2 indices buffer size too small
+ * @return -3 magnitudes buffer size too small
+ * @return -4 indices_size != magnitudes_size
+ */
+int fft_prepare_magnitudes_buffer(uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, indexed_float_type *indexed_magnitudes, uint32_t n_ms_components)
+{
+    if (indices_buffer == NULL || magnitudes_buffer == NULL || indexed_magnitudes == NULL)
+    {
+        return -1;
+    }
+    if (indices_size < (4 * n_ms_components))
+    {
+        return -2;
+    }
+    if (magnitudes_size < (4 * n_ms_components))
+    {
+        return -3;
+    }
+    if (indices_size != magnitudes_size)
+    {
+        return -4;
+    }
+    for (uint32_t i = 0; i < n_ms_components; i++)
+    {
+        memcpy(&indices_buffer[i * sizeof(uint32_t)], &indexed_magnitudes[i].index, sizeof(uint32_t));
+        memcpy(&magnitudes_buffer[i * sizeof(float)], &indexed_magnitudes[i].value, sizeof(float));
+    }
+    return 0;
+}
+
+/**
+ * @brief Prepare most significant complex components to send over uart
+ *
+ * @param complex_buffer uart complex data buffer
+ * @param complex_size size of uart complex data buffer
+ * @param n_ms_components number of most significant fft components to send over uart
+ * @param fft_complex_arr fft complex components array (re, im elements)
+ * @param indexed_mangitudes indexed magnitudes array
+ * @return 0 OK
+ * @return -1 NULL pointers passed
+ * @return -2 complex buffer size too small
+ */
+int fft_prepare_complex_buffer(uint8_t *complex_buffer, size_t complex_size, uint32_t n_ms_components, indexed_float_type *indexed_mangitudes, float *fft_complex_arr)
+{
+    if (complex_buffer == NULL || fft_complex_arr == NULL || indexed_mangitudes == NULL)
+    {
+        return -1;
+    }
+    if (complex_size < (n_ms_components * 4 * 2))
+    {
+        return -2;
+    }
+    for (uint32_t i = 0; i < n_ms_components; i++)
+    {
+        uint32_t _index = indexed_mangitudes[i].index * 2;
+        memcpy(&complex_buffer[_index * sizeof(float)], &fft_complex_arr[_index], 2 * sizeof(float));
+        // memcpy(&complex_buffer[_index * sizeof(float)], &fft_complex_arr[_index], sizeof(float));
+        // memcpy(&complex_buffer[(_index + 1) * sizeof(float)], &fft_complex_arr[_index + 1], sizeof(float));
+    }
+    return 0;
+}
+
+/**
  * @brief Send the first n components (magnitude, re, im) of DFFT calculation
  *
- * @param n_samples: number of samples taken during the vibration sampling process
- * @param n_ms_elements: number of most significant components to send over uart
+ * @param fft_complex_arr fft complex components array (re, im elements)
+ * @param indexed_magnitudes indexed magnitudes array
+ * @param n_samples number of data samples
+ * @param n_ms_elements number of most significant elements
  * @return 0 OK
  * @return -1 failed to malloc metadata buffer
  * @return -2 failed to prepare metadata buffer
@@ -253,94 +278,101 @@ int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, uint32_t n_samples, ui
  * @return -7 failed to UART write buffers
  * @return -8 failed to debug UART buffers
  */
-int fft_send_most_significant_components_over_uart(uint32_t n_samples, uint32_t n_ms_elements)
+int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type *indexed_magnitudes, uint32_t n_samples, uint32_t n_ms_elements)
 {
-    uint8_t *metadata_buffer = NULL;
-    uint8_t *indices_buffer = NULL;
-    uint8_t *magnitudes_buffer = NULL;
-    uint8_t *complex_data_buffer = NULL;
-
     int error_code = 0;
     // Metadata buffer
     size_t metadata_size = 2 * sizeof(uint32_t);
-    metadata_buffer = (uint8_t *)malloc(metadata_size);
+    uint8_t *metadata_buffer = (uint8_t *)malloc(metadata_size);
     if (metadata_buffer == NULL)
     {
-        ESP_LOGI(TAG, "-1");
-        error_code = -1;
-        goto cleanup;
-    }
-
-    if (fft_prepare_metadata_buffer(metadata_buffer, n_samples, n_ms_elements) != 0)
-    {
-        ESP_LOGI(TAG, "-2");
-        error_code = -2;
-        goto cleanup;
+        return -1;
     }
 
     // Most significant indices buffer
     size_t indices_size = n_ms_elements * sizeof(uint32_t);
-    indices_buffer = (uint8_t *)malloc(indices_size);
+    uint8_t *indices_buffer = (uint8_t *)malloc(indices_size);
     if (indices_buffer == NULL)
     {
-        ESP_LOGI(TAG, "-3");
-        error_code = -3;
-        goto cleanup;
+        free(metadata_buffer);
+        return -2;
     }
 
     // Magnitudes
     size_t magnitudes_size = n_ms_elements * sizeof(float);
-    magnitudes_buffer = (uint8_t *)malloc(magnitudes_size);
+    uint8_t *magnitudes_buffer = (uint8_t *)malloc(magnitudes_size);
     if (magnitudes_buffer == NULL)
     {
-        ESP_LOGI(TAG, "-4");
-        error_code = -4;
-        goto cleanup;
+        free(metadata_buffer);
+        free(indices_buffer);
+        return -3;
     }
 
     // Complex data buffer
     size_t complex_size = 2 * n_ms_elements * sizeof(float);
-    complex_data_buffer = (uint8_t *)malloc(complex_size);
-    if (complex_data_buffer == NULL)
+    uint8_t *complex_buffer = (uint8_t *)malloc(complex_size);
+    if (complex_buffer == NULL)
     {
-        ESP_LOGI(TAG, "-5");
-        error_code = -5;
-        goto cleanup;
-    }
-
-    if (fft_prepare_uart_data_buffer(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size, n_ms_elements, fft_magnitudes_arr, fft_complex_arr) != 0)
-    {
-
-        ESP_LOGI(TAG, "-6");
-        error_code = -6;
-        goto cleanup;
-    }
-
-    // Send data
-    int err_c;
-    if ((err_c = uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size)) != 0)
-    {
-        ESP_LOGI(TAG, "-7; %d", err_c);
-        error_code = -7;
-        goto cleanup;
-    }
-
-    // if (fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_data_buffer, complex_size) != 0)
-    // {
-    //     ESP_LOGI(TAG, "-8");
-    //     error_code = -8;
-    //     goto cleanup;
-    // }
-    cleanup:
-    if (metadata_buffer != NULL)
         free(metadata_buffer);
-    if (indices_buffer != NULL)
         free(indices_buffer);
-    if (magnitudes_buffer != NULL)
         free(magnitudes_buffer);
-    if (complex_data_buffer != NULL)
-        free(complex_data_buffer);
-    return error_code;
+        return -4;
+    }
+
+    if ((error_code = fft_prepare_metadata_buffer(metadata_buffer, metadata_size, n_ms_elements, n_ms_elements)) != 0)
+    {
+        ESP_LOGI(TAG, "error -5, sub error %d", error_code);
+        free(metadata_buffer);
+        free(indices_buffer);
+        free(magnitudes_buffer);
+        free(complex_buffer);
+        return -5;
+    }
+
+    if ((error_code = fft_prepare_magnitudes_buffer(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, indexed_magnitudes, n_ms_elements)) != 0)
+    {
+        ESP_LOGI(TAG, "error -6, sub error %d", error_code);
+        free(metadata_buffer);
+        free(indices_buffer);
+        free(magnitudes_buffer);
+        free(complex_buffer);
+        return -6;
+    }
+
+    if ((error_code = fft_prepare_complex_buffer(complex_buffer, complex_size, n_ms_elements, indexed_magnitudes, fft_complex_arr)) != 0)
+    {
+        ESP_LOGI(TAG, "error -7, sub error %d", error_code);
+        free(metadata_buffer);
+        free(indices_buffer);
+        free(magnitudes_buffer);
+        free(complex_buffer);
+        return -7;
+    }
+
+    if ((error_code = uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
+    {
+        ESP_LOGI(TAG, "error -8, sub error %d", error_code);
+        free(metadata_buffer);
+        free(indices_buffer);
+        free(magnitudes_buffer);
+        free(complex_buffer);
+        return -8;
+    }
+
+    // if ((error_code = fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
+    // {
+    //     ESP_LOGE(TAG, "error -9, sub error %d", error_code);
+    //     free(metadata_buffer);
+    //     free(indices_buffer);
+    //     free(magnitudes_buffer);
+    //     free(complex_buffer);
+    //     return -9;
+    // }
+    free(metadata_buffer);
+    free(indices_buffer);
+    free(magnitudes_buffer);
+    free(complex_buffer);
+    return 0;
 }
 
 /**

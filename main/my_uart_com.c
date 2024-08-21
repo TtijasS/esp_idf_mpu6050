@@ -62,6 +62,7 @@ int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uin
         return -1;
     }
     const char* TAG = "SEND FFT";
+    esp_log_level_set(TAG, ESP_LOG_INFO);
     // ESP_LOGI(TAG, "metadata_size: %u, data_size: %u", metadata_size, data_size);
     // Send metadata
     uart_write_bytes(uart_num, "\xfa\xfa\xfa\xfa\xff", 5); // Start of transmission

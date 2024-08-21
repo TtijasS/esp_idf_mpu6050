@@ -38,5 +38,4 @@ void i2c_init()
     ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_master_bus_handle, &i2c_master_device_config, &i2c_master_dev_handle));
     // Probe the slave device
     ESP_ERROR_CHECK(i2c_master_probe(i2c_master_bus_handle, MPU_ADR_REG, I2C_TIMEOUT_MS));
-    ESP_LOGI(TAG, "I2C initialized successfully");
 }
