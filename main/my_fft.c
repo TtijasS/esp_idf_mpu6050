@@ -289,98 +289,92 @@ int fft_prepare_complex_buffer(uint8_t *complex_buffer, size_t complex_size, uin
 int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type *indexed_magnitudes, uint32_t n_samples, uint32_t n_ms_elements)
 {
     int error_code = 0;
+    uint8_t *metadata_buffer = NULL;
+    uint8_t *indices_buffer = NULL;
+    uint8_t *magnitudes_buffer = NULL;
+    uint8_t *complex_buffer = NULL;
+
     // Metadata buffer
     size_t metadata_size = 2 * sizeof(uint32_t);
-    uint8_t *metadata_buffer = (uint8_t *)malloc(metadata_size);
+    metadata_buffer = (uint8_t *)malloc(metadata_size);
     if (metadata_buffer == NULL)
     {
-        return -1;
+        error_code = -1;
+        goto memcleanup;
     }
 
     // Most significant indices buffer
     size_t indices_size = n_ms_elements * sizeof(uint32_t);
-    uint8_t *indices_buffer = (uint8_t *)malloc(indices_size);
+    indices_buffer = (uint8_t *)malloc(indices_size);
     if (indices_buffer == NULL)
     {
-        free(metadata_buffer);
-        return -2;
+        error_code = -2;
+        goto memcleanup;
     }
 
     // Magnitudes
     size_t magnitudes_size = n_ms_elements * sizeof(float);
-    uint8_t *magnitudes_buffer = (uint8_t *)malloc(magnitudes_size);
+    magnitudes_buffer = (uint8_t *)malloc(magnitudes_size);
     if (magnitudes_buffer == NULL)
     {
-        free(metadata_buffer);
-        free(indices_buffer);
-        return -3;
+        error_code = -3;
+        goto memcleanup;
     }
 
     // Complex data buffer
     size_t complex_size = 2 * n_ms_elements * sizeof(float);
-    uint8_t *complex_buffer = (uint8_t *)malloc(complex_size);
+    complex_buffer = (uint8_t *)malloc(complex_size);
     if (complex_buffer == NULL)
     {
-        free(metadata_buffer);
-        free(indices_buffer);
-        free(magnitudes_buffer);
-        return -4;
+        error_code = -4;
+        goto memcleanup;
     }
 
     if ((error_code = fft_prepare_metadata_buffer(metadata_buffer, metadata_size, n_ms_elements, n_ms_elements)) != 0)
     {
         ESP_LOGI(TAG, "error -5, sub error %d", error_code);
-        free(metadata_buffer);
-        free(indices_buffer);
-        free(magnitudes_buffer);
-        free(complex_buffer);
-        return -5;
+        error_code = -5;
+        goto memcleanup;
     }
 
     if ((error_code = fft_prepare_magnitudes_buffer(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, indexed_magnitudes, n_ms_elements)) != 0)
     {
         ESP_LOGI(TAG, "error -6, sub error %d", error_code);
-        free(metadata_buffer);
-        free(indices_buffer);
-        free(magnitudes_buffer);
-        free(complex_buffer);
+        error_code = -6;
+        goto memcleanup;
         return -6;
     }
 
     if ((error_code = fft_prepare_complex_buffer(complex_buffer, complex_size, n_ms_elements, indexed_magnitudes, fft_complex_arr)) != 0)
     {
         ESP_LOGI(TAG, "error -7, sub error %d", error_code);
-        free(metadata_buffer);
-        free(indices_buffer);
-        free(magnitudes_buffer);
-        free(complex_buffer);
-        return -7;
+        error_code = -7;
+        goto memcleanup;
     }
 
     if ((error_code = uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
     {
         ESP_LOGI(TAG, "error -8, sub error %d", error_code);
-        free(metadata_buffer);
-        free(indices_buffer);
-        free(magnitudes_buffer);
-        free(complex_buffer);
-        return -8;
+        error_code = -8;
+        goto memcleanup;
     }
 
     // if ((error_code = fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
     // {
     //     ESP_LOGE(TAG, "error -9, sub error %d", error_code);
-    //     free(metadata_buffer);
-    //     free(indices_buffer);
-    //     free(magnitudes_buffer);
-    //     free(complex_buffer);
-    //     return -9;
+    //     error_code = -9;
+    //     goto memcleanup;
     // }
-    free(metadata_buffer);
-    free(indices_buffer);
-    free(magnitudes_buffer);
-    free(complex_buffer);
-    return 0;
+memcleanup:
+    if (metadata_buffer != NULL)
+        free(metadata_buffer);
+    if (indices_buffer != NULL)
+        free(indices_buffer);
+    if (magnitudes_buffer != NULL)
+        free(magnitudes_buffer);
+    if (complex_buffer != NULL)
+        free(complex_buffer);
+    return error_code;
 }
 
 /**
