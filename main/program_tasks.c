@@ -28,9 +28,9 @@ void task_initialization(void *params)
 	ESP_LOGI(TAG, "Init complete");
 
 	xTaskNotifyGive(notif_data_sampling);
-	UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-	ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-	ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_INIT_STACK_SIZE - stack_hwm), TASK_INIT_STACK_SIZE);
+	// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+	// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+	// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_INIT_STACK_SIZE - stack_hwm), TASK_INIT_STACK_SIZE);
 	vTaskDelete(NULL);
 }
 
@@ -40,13 +40,13 @@ void task_mpu6050_data_sampling(void *params)
 	esp_log_level_set(TAG, ESP_LOG_INFO);
 	UBaseType_t old_free_heap = 0;
 
-	size_t data_samples = 0;
+	size_t index = 0;
 	TickType_t last_wake_time;
 	while (1)
 	{
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		last_wake_time = xTaskGetTickCount();
-		while (data_samples < N_SAMPLES)
+		while (index < N_SAMPLES)
 		{
 			if (!mpu_data_read_extract_accel(&i2c_buffer_t, &mpu_data_t))
 			{
@@ -58,22 +58,22 @@ void task_mpu6050_data_sampling(void *params)
 
 			vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(1)); // Sampling frequency 1 ms
 			// copy value to the array
-			memcpy(&data_sampled_x[data_samples], &mpu_data_t.accel_gyro_g[0], sizeof(float)); // X-axis
-			// memcpy(&data_sampled_y[data_samples], &mpu_data_t.accel_gyro_g[1], sizeof(float)); // Y-axis
-			// memcpy(&data_sampled_z[data_samples], &mpu_data_t.accel_gyro_g[2], sizeof(float)); // Z-axis
+			memcpy(&data_sampled_x[index], &mpu_data_t.accel_gyro_g[0], sizeof(float)); // X-axis
+			// memcpy(&data_sampled_y[index], &mpu_data_t.accel_gyro_g[1], sizeof(float)); // Y-axis
+			// memcpy(&data_sampled_z[index], &mpu_data_t.accel_gyro_g[2], sizeof(float)); // Z-axis
 			last_wake_time = xTaskGetTickCount();
-			data_samples++;
+			index++;
 		}
-		data_samples = 0;
-		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_MPU_SAMPLING_STACK_SIZE - stack_hwm), TASK_MPU_SAMPLING_STACK_SIZE);
+		index = 0;
+		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_MPU_SAMPLING_STACK_SIZE - stack_hwm), TASK_MPU_SAMPLING_STACK_SIZE);
 
-		ESP_LOGI(TAG, "Sampling complete");
+		// ESP_LOGI(TAG, "Sampling complete");
 
-		UBaseType_t free_heap = xPortGetFreeHeapSize();
-		ESP_LOGI(TAG, "Free heap size: %u B (old %u)", free_heap, old_free_heap);
-		old_free_heap = free_heap;
+		// UBaseType_t free_heap = xPortGetFreeHeapSize();
+		// ESP_LOGI(TAG, "Free heap size: %u B (old %u)", free_heap, old_free_heap);
+		// old_free_heap = free_heap;
 		xTaskNotifyGive(notif_fft_calculation);
 	}
 }
@@ -96,13 +96,13 @@ void task_fft_calculation(void *params)
 
 		fft_calculate_magnitudes(indexed_magnitudes, fft_complex_arr, MAGNITUDES_SIZE);
 
-		fft_sort_magnitudes(indexed_magnitudes, MAGNITUDES_SIZE);
+		// fft_sort_magnitudes(indexed_magnitudes, MAGNITUDES_SIZE);
 
-		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_FFT_CALC_STACK_SIZE - stack_hwm), TASK_FFT_CALC_STACK_SIZE);
+		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_FFT_CALC_STACK_SIZE - stack_hwm), TASK_FFT_CALC_STACK_SIZE);
 
-		ESP_LOGI(TAG, "FFT calculations complete");
+		// ESP_LOGI(TAG, "FFT calculations complete");
 		xTaskNotifyGive(notif_send_fft_components);
 	}
 }
@@ -122,11 +122,11 @@ void task_fft_send_components(void *params)
 		if (error_code != 0)
 			ESP_LOGE(TAG, "Error %d", error_code);
 
-		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_FFT_STACK_SIZE - stack_hwm), TASK_SEND_FFT_STACK_SIZE);
+		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_FFT_STACK_SIZE - stack_hwm), TASK_SEND_FFT_STACK_SIZE);
 
-		ESP_LOGI(TAG, "FFT components sent");
+		// ESP_LOGI(TAG, "FFT components sent");
 		xTaskNotifyGive(notif_send_data_samples);
 	}
 }
@@ -140,18 +140,21 @@ void task_send_data_samples(void *params)
 	{
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
+		uart_write_bytes(uart_num, "\n", 1);
 		uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xff", 5);
+		// printf("\ndata*");
 		for (size_t i = 0; i < N_SAMPLES; i++)
 		{
 			// printf("%.4f, ", data_sampled_x[i]);
 			uart_write_bytes(uart_num, (const char *)&data_sampled_x[i], sizeof(float));
 		}
+		// printf("*data\n");
 		uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xfe", 5);
 
-		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_DATA_SAMPLES_STACK_SIZE - stack_hwm), TASK_SEND_DATA_SAMPLES_STACK_SIZE);
-		ESP_LOGI(TAG, "Data samples sent");
+		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_DATA_SAMPLES_STACK_SIZE - stack_hwm), TASK_SEND_DATA_SAMPLES_STACK_SIZE);
+		// ESP_LOGI(TAG, "Data samples sent");
 		// xTaskNotifyGive(notif_data_sampling);
 	}
 }

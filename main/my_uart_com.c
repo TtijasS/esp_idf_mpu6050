@@ -1,7 +1,7 @@
 #include "my_uart_com.h"
 
 // Constants
-const uart_port_t uart_num = UART_NUM_0;
+const uart_port_t uart_num = UART_NUM_1;
 const int uart_buffer_size = (UART_BUFFER_SIZE * sizeof(float));
 
 /**
@@ -71,7 +71,7 @@ int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uin
         return -2;
     }
     uart_write_bytes(uart_num, "\xff\xfa\xfa\xfa\xfa", 5); // End of transmission
-
+    uart_write_bytes(uart_num, "\n", 1);
     // Send indices
     uart_write_bytes(uart_num, "\xfb\xfb\xfb\xfb\xff", 5); // Start of transmission
     if (uart_write_bytes(uart_num, (const char *)indices_buffer, indices_size) == -1)
@@ -79,6 +79,7 @@ int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uin
         return -3;
     }
     uart_write_bytes(uart_num, "\xff\xfb\xfb\xfb\xfb", 5); // End of transmission
+    uart_write_bytes(uart_num, "\n", 1);
 
     // Send magnitudes
     uart_write_bytes(uart_num, "\xfc\xfc\xfc\xfc\xff", 5); // Start of transmission
@@ -87,6 +88,7 @@ int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uin
         return -4;
     }
     uart_write_bytes(uart_num, "\xff\xfc\xfc\xfc\xfc", 5); // End of transmission
+    uart_write_bytes(uart_num, "\n", 1);
     
     // Send complex data
     uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xff", 5); // Start of transmission
@@ -95,6 +97,6 @@ int uart_send_fft_components(uint8_t *metadata_buffer, size_t metadata_size, uin
         return -5;
     }
     uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xfd", 5); // End of transmission
-    
+    uart_write_bytes(uart_num, "\n", 1);
     return 0;
 }

@@ -221,6 +221,7 @@ int fft_prepare_magnitudes_buffer(uint8_t *indices_buffer, size_t indices_size, 
     {
         return -4;
     }
+
     for (uint32_t i = 0; i < n_ms_components; i++)
     {
         memcpy(&indices_buffer[i * sizeof(uint32_t)], &indexed_magnitudes[i].index, sizeof(uint32_t));
@@ -240,6 +241,7 @@ int fft_prepare_magnitudes_buffer(uint8_t *indices_buffer, size_t indices_size, 
  * @return 0 OK
  * @return -1 NULL pointers passed
  * @return -2 complex buffer size too small
+ * @return -3 magnitude index out of range
  */
 int fft_prepare_complex_buffer(uint8_t *complex_buffer, size_t complex_size, uint32_t n_ms_components, indexed_float_type *indexed_mangitudes, float *fft_complex_arr)
 {
@@ -247,16 +249,22 @@ int fft_prepare_complex_buffer(uint8_t *complex_buffer, size_t complex_size, uin
     {
         return -1;
     }
-    if (complex_size < (n_ms_components * 4 * 2))
+    if (complex_size < (n_ms_components * sizeof(float) * 2))
     {
         return -2;
     }
     for (uint32_t i = 0; i < n_ms_components; i++)
     {
-        uint32_t _index = indexed_mangitudes[i].index * 2;
-        memcpy(&complex_buffer[_index * sizeof(float)], &fft_complex_arr[_index], 2 * sizeof(float));
-        // memcpy(&complex_buffer[_index * sizeof(float)], &fft_complex_arr[_index], sizeof(float));
-        // memcpy(&complex_buffer[(_index + 1) * sizeof(float)], &fft_complex_arr[_index + 1], sizeof(float));
+        uint32_t mag_index = indexed_mangitudes[i].index * 2;
+        if (mag_index >= N_SAMPLES * 2)
+        {
+            return -3;
+        }
+        // memcpy(&complex_buffer[i * 2 * sizeof(float)], &fft_complex_arr[_index], 2 * sizeof(float));
+        // re part is at index 2i
+        memcpy(&complex_buffer[(2 * i) * sizeof(float)], &fft_complex_arr[mag_index], sizeof(float));
+        // im part is at index 2i+1
+        memcpy(&complex_buffer[((2 * i) + 1) * sizeof(float)], &fft_complex_arr[mag_index + 1], sizeof(float));
     }
     return 0;
 }

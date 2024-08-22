@@ -24,8 +24,8 @@ void app_main(void)
     xTaskCreate(task_fft_send_components, "Send FFT components task", TASK_SEND_FFT_STACK_SIZE, NULL, 10, &notif_send_fft_components);
     xTaskCreate(task_send_data_samples, "Send data samples task", TASK_SEND_DATA_SAMPLES_STACK_SIZE, NULL, 10, &notif_send_data_samples);
 
-    UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-    ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+    // UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+    // ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
     xTaskNotifyGive(notif_init); // Start the init task after all the tasks get created and are put into suspended mode
     
 }
