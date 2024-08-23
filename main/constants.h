@@ -8,15 +8,15 @@
 	#define TASK_PRIORITY_SORT 1
 	#define TASK_PRIORITY_UART 1
 
-	#define TASK_INIT_STACK_SIZE (512*5)
+	#define TASK_INIT_STACK_SIZE (512*30)
 	#define TASK_MPU_SAMPLING_STACK_SIZE (512*5)
 	#define TASK_FFT_CALC_STACK_SIZE (512*5)
 	#define TASK_SEND_FFT_STACK_SIZE (512*5)
 	#define TASK_SEND_DATA_SAMPLES_STACK_SIZE (512*5)
 
-	#define N_SAMPLES 1024					  // Number of samples to run FFT on
-	#define FFT_COMPONENTS_SIZE N_SAMPLES * 2 // Size of ffc components array size
-	#define MAGNITUDES_SIZE N_SAMPLES	  // size of magnitudes struct array size
+	#define N_SAMPLES 8192					  // Number of samples to run FFT on
+	#define FFT_COMPONENTS_SIZE (N_SAMPLES * 2) // Size of fft complex components array size
+	#define MAGNITUDES_SIZE (N_SAMPLES / 2)	  // size of magnitudes struct array size
 
 	// I2C CONFIGURATION
 	#define I2C_SCL_IO CONFIG_I2C_MASTER_SCL // GPIO number used for I2C master clock
@@ -29,7 +29,7 @@
 	#define I2C_WRITE_BUFF_SIZE 2 // i2c max write buffer size
 
 	// UART CONFIGURATION
-	#define UART_BAUD_RATE 3000000 // UART baud rate
+	#define UART_BAUD_RATE 115200 // UART baud rate
 	#define UART_BUFFER_SIZE 1024 // UART buffer size
 
 	// MPU REGISTERS FOR COMMUNICATION

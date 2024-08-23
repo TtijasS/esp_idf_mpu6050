@@ -330,7 +330,7 @@ int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type 
         goto memcleanup;
     }
 
-    if ((error_code = fft_prepare_metadata_buffer(metadata_buffer, metadata_size, n_ms_elements, n_ms_elements)) != 0)
+    if ((error_code = fft_prepare_metadata_buffer(metadata_buffer, metadata_size, n_samples, n_ms_elements)) != 0)
     {
         ESP_LOGI(TAG, "error -5, sub error %d", error_code);
         error_code = -5;

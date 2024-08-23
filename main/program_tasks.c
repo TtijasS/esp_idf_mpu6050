@@ -27,10 +27,10 @@ void task_initialization(void *params)
 
 	ESP_LOGI(TAG, "Init complete");
 
-	xTaskNotifyGive(notif_data_sampling);
-	// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-	// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-	// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_INIT_STACK_SIZE - stack_hwm), TASK_INIT_STACK_SIZE);
+	// xTaskNotifyGive(notif_data_sampling);
+	UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+	ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+	ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_INIT_STACK_SIZE - stack_hwm), TASK_INIT_STACK_SIZE);
 	vTaskDelete(NULL);
 }
 
@@ -46,7 +46,8 @@ void task_mpu6050_data_sampling(void *params)
 	{
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		last_wake_time = xTaskGetTickCount();
-		while (index < N_SAMPLES)
+		while (index < ((uint32_t)N_SAMPLES/1000)*1000)
+		// while (index < N_SAMPLES)
 		{
 			if (!mpu_data_read_extract_accel(&i2c_buffer_t, &mpu_data_t))
 			{
@@ -96,7 +97,7 @@ void task_fft_calculation(void *params)
 
 		fft_calculate_magnitudes(indexed_magnitudes, fft_complex_arr, MAGNITUDES_SIZE);
 
-		// fft_sort_magnitudes(indexed_magnitudes, MAGNITUDES_SIZE);
+		fft_sort_magnitudes(indexed_magnitudes, MAGNITUDES_SIZE);
 
 		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
 		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
@@ -116,7 +117,7 @@ void task_fft_send_components(void *params)
 	{
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-		uint32_t n_ms_components = fft_percentile_n_components(0, N_SAMPLES);
+		uint32_t n_ms_components = fft_percentile_n_components(0, MAGNITUDES_SIZE);
 
 		int error_code = fft_send_ms_components_over_uart(fft_complex_arr, indexed_magnitudes, N_SAMPLES, n_ms_components);
 		if (error_code != 0)

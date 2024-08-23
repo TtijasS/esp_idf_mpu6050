@@ -1,7 +1,7 @@
 #include "my_uart_com.h"
 
 // Constants
-const uart_port_t uart_num = UART_NUM_1;
+const uart_port_t uart_num = UART_NUM_0;
 const int uart_buffer_size = (UART_BUFFER_SIZE * sizeof(float));
 
 /**
