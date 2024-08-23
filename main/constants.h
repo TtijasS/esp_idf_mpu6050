@@ -8,13 +8,13 @@
 	#define TASK_PRIORITY_SORT 1
 	#define TASK_PRIORITY_UART 1
 
-	#define TASK_INIT_STACK_SIZE (512*30)
+	#define TASK_INIT_STACK_SIZE (512*5)
 	#define TASK_MPU_SAMPLING_STACK_SIZE (512*5)
 	#define TASK_FFT_CALC_STACK_SIZE (512*5)
 	#define TASK_SEND_FFT_STACK_SIZE (512*5)
 	#define TASK_SEND_DATA_SAMPLES_STACK_SIZE (512*5)
 
-	#define N_SAMPLES 8192					  // Number of samples to run FFT on
+	#define N_SAMPLES 16384 //CONFIG_DSP_MAX_FFT_SIZE					  // Number of samples to run FFT on
 	#define FFT_COMPONENTS_SIZE (N_SAMPLES * 2) // Size of fft complex components array size
 	#define MAGNITUDES_SIZE (N_SAMPLES / 2)	  // size of magnitudes struct array size
 

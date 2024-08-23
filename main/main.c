@@ -19,10 +19,10 @@ void app_main(void)
     esp_log_level_set(TAG, ESP_LOG_DEBUG);
 
     xTaskCreatePinnedToCore(task_initialization, "Init task", TASK_INIT_STACK_SIZE, NULL, 10, &notif_init, tskNO_AFFINITY);
-    // xTaskCreatePinnedToCore(task_mpu6050_data_sampling, "Data sampling task", TASK_MPU_SAMPLING_STACK_SIZE, NULL, 10, &notif_data_sampling, tskNO_AFFINITY);
-    // xTaskCreate(task_fft_calculation, "FFT calculation task", TASK_FFT_CALC_STACK_SIZE, NULL, 10, &notif_fft_calculation);
-    // xTaskCreate(task_fft_send_components, "Send FFT components task", TASK_SEND_FFT_STACK_SIZE, NULL, 10, &notif_send_fft_components);
-    // xTaskCreate(task_send_data_samples, "Send data samples task", TASK_SEND_DATA_SAMPLES_STACK_SIZE, NULL, 10, &notif_send_data_samples);
+    xTaskCreatePinnedToCore(task_mpu6050_data_sampling, "Data sampling task", TASK_MPU_SAMPLING_STACK_SIZE, NULL, 10, &notif_data_sampling, tskNO_AFFINITY);
+    xTaskCreate(task_fft_calculation, "FFT calculation task", TASK_FFT_CALC_STACK_SIZE, NULL, 10, &notif_fft_calculation);
+    xTaskCreate(task_fft_send_components, "Send FFT components task", TASK_SEND_FFT_STACK_SIZE, NULL, 10, &notif_send_fft_components);
+    xTaskCreate(task_send_data_samples, "Send data samples task", TASK_SEND_DATA_SAMPLES_STACK_SIZE, NULL, 10, &notif_send_data_samples);
 
     // UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
     // ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);

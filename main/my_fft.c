@@ -2,11 +2,12 @@
 
 void fft_init()
 {
+    
     esp_err_t ret = dsps_fft2r_init_fc32(NULL, N_SAMPLES);
 
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG, "Error in FFT init: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Error in FFT init: %s (%d)", esp_err_to_name(ret), ret);
     }
 
     ESP_LOGI(TAG, "FFT init complete");
@@ -352,12 +353,12 @@ int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type 
         goto memcleanup;
     }
 
-    if ((error_code = uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
-    {
-        ESP_LOGI(TAG, "error -8, sub error %d", error_code);
-        error_code = -8;
-        goto memcleanup;
-    }
+    // if ((error_code = uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
+    // {
+    //     ESP_LOGI(TAG, "error -8, sub error %d", error_code);
+    //     error_code = -8;
+    //     goto memcleanup;
+    // }
 
     // if ((error_code = fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
     // {
