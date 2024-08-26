@@ -6,9 +6,9 @@ TaskHandle_t notif_fft_calculation;
 TaskHandle_t notif_send_fft_components;
 TaskHandle_t notif_send_data_samples;
 
-// float data_sampled_x[N_SAMPLES];
+// float data_sampled[N_SAMPLES];
 // __attribute__((aligned(16))) float fft_complex_arr[N_SAMPLES * 2];					 // Real and imaginary part of sampled data [r0, im0, r1, im1, r2, im2, ...r_n_samples, im_n_samples]
-// __attribute__((aligned(16))) indexed_float_type indexed_magnitudes[MAGNITUDES_SIZE]; // FFT output for magnitudes
+// indexed_float_type indexed_magnitudes[MAGNITUDES_SIZE]; // FFT output for magnitudes
 float *data_sampled;
 indexed_float_type *indexed_magnitudes;
 float *fft_complex_arr;
@@ -19,41 +19,56 @@ void task_initialization(void *params)
 	const char *TAG = "TSK INIT FN";
 	esp_log_level_set(TAG, ESP_LOG_INFO);
 
+	int error_code = 0;
+
 	// Allocate memory for data_sampled in DRAM with 8-bit and 32-bit alignment
-    data_sampled = (float*)heap_caps_malloc(N_SAMPLES * sizeof(float), MALLOC_CAP_8BIT | MALLOC_CAP_32BIT);
+    data_sampled = (float*)heap_caps_malloc(N_SAMPLES * sizeof(float), MALLOC_CAP_SPIRAM);
     if (!data_sampled) {
         ESP_LOGE(TAG, "Failed to allocate memory for data_sampled");
-        return;  // Handle error
+		vTaskDelete(NULL);
     }
 
     // Allocate memory for indexed_magnitudes in DRAM with 8-bit alignment
-    indexed_magnitudes = (indexed_float_type*)heap_caps_malloc(MAGNITUDES_SIZE * sizeof(indexed_float_type), MALLOC_CAP_8BIT);
+    indexed_magnitudes = (indexed_float_type*)heap_caps_malloc(MAGNITUDES_SIZE * sizeof(indexed_float_type), MALLOC_CAP_SPIRAM);
     if (!indexed_magnitudes) {
         ESP_LOGE(TAG, "Failed to allocate memory for indexed_magnitudes");
-        return;  // Handle error
+		vTaskDelete(NULL);
     }
 
     // Allocate aligned memory for fft_complex_arr in PSRAM with 16-byte alignment
-    fft_complex_arr = (float*)heap_caps_aligned_alloc(16, N_SAMPLES * 2 * sizeof(float), MALLOC_CAP_SPIRAM);
+	fft_complex_arr = (float *)heap_caps_aligned_alloc(16, N_SAMPLES*2*sizeof(float), MALLOC_CAP_SPIRAM);
+    // fft_complex_arr = (float*)heap_caps_aligned_alloc(16, N_SAMPLES * 2 * sizeof(float), MALLOC_CAP_SPIRAM);
     if (!fft_complex_arr) {
         ESP_LOGE(TAG, "Failed to allocate memory for fft_complex_arr");
-        return;  // Handle error
+		vTaskDelete(NULL);
     }
 	ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 	// Init I2C and UART
-	i2c_init();
+	if ((error_code = i2c_init()) != 0)
+	{
+		ESP_LOGE(TAG, "Failed to init i2c with error code %d", error_code);
+		vTaskDelete(NULL);
+	}
 	// Configure MPU6050
-	mpu_initial_setup(&i2c_buffer_t);
+	if((error_code = mpu_initial_setup(&i2c_buffer_t)) != 0)
+	{
+		ESP_LOGE(TAG, "Failed to init i2c with error code %d", error_code);
+		vTaskDelete(NULL);
+	}
 	// Configure UART
 	uart_init();
 	// Init FFT memory
-	fft_init();
+	if((error_code = fft_init()) != 0)
+	{
+		ESP_LOGE(TAG, "Failed to init fft with error code %d", error_code);
+		vTaskDelete(NULL);
+	}
 
-	ESP_LOGI(TAG, "Init complete");
+	ESP_LOGI(TAG, "Init successfull");
 
-	UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-	ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-	ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_INIT_STACK_SIZE - stack_hwm), TASK_INIT_STACK_SIZE);
+	// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+	// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+	// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_INIT_STACK_SIZE - stack_hwm), TASK_INIT_STACK_SIZE);
 	xTaskNotifyGive(notif_data_sampling);
 	vTaskDelete(NULL);
 }
@@ -70,8 +85,8 @@ void task_mpu6050_data_sampling(void *params)
 	{
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 		last_wake_time = xTaskGetTickCount();
-		while (index < ((uint32_t)N_SAMPLES/1000)*1000)
-		// while (index < N_SAMPLES)
+		// while (index < ((uint32_t)N_SAMPLES/1000)*1000)
+		while (index < N_SAMPLES)
 		{
 			if (!mpu_data_read_extract_accel(&i2c_buffer_t, &mpu_data_t))
 			{
@@ -83,22 +98,20 @@ void task_mpu6050_data_sampling(void *params)
 
 			vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(1)); // Sampling frequency 1 ms
 			// copy value to the array
-			memcpy(&data_sampled_x[index], &mpu_data_t.accel_gyro_g[0], sizeof(float)); // X-axis
-			// memcpy(&data_sampled_y[index], &mpu_data_t.accel_gyro_g[1], sizeof(float)); // Y-axis
-			// memcpy(&data_sampled_z[index], &mpu_data_t.accel_gyro_g[2], sizeof(float)); // Z-axis
+			memcpy(&data_sampled[index], &mpu_data_t.accel_gyro_g[0], sizeof(float)); // X-axis
 			last_wake_time = xTaskGetTickCount();
 			index++;
 		}
 		index = 0;
-		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_MPU_SAMPLING_STACK_SIZE - stack_hwm), TASK_MPU_SAMPLING_STACK_SIZE);
+		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_MPU_SAMPLING_STACK_SIZE - stack_hwm), TASK_MPU_SAMPLING_STACK_SIZE);
 
-		ESP_LOGI(TAG, "Sampling complete");
+		// ESP_LOGI(TAG, "Sampling complete");
 
-		UBaseType_t free_heap = xPortGetFreeHeapSize();
-		ESP_LOGI(TAG, "Free heap size: %u B (old %u)", free_heap, old_free_heap);
-		old_free_heap = free_heap;
+		// UBaseType_t free_heap = xPortGetFreeHeapSize();
+		// ESP_LOGI(TAG, "Free heap size: %u B (old %u)", free_heap, old_free_heap);
+		// old_free_heap = free_heap;
 		xTaskNotifyGive(notif_fft_calculation);
 	}
 }
@@ -113,7 +126,7 @@ void task_fft_calculation(void *params)
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
 		// Copy sampled data to the complex array. Re parts only, im all to zero.
-		fft_prepare_complex_arr(data_sampled_x, fft_complex_arr, N_SAMPLES);
+		fft_prepare_complex_arr(data_sampled, fft_complex_arr, N_SAMPLES);
 		// ESP_LOGI(TAG, "Window prepared and data merged to fft_components");
 
 		fft_calculate_re_im(fft_complex_arr, N_SAMPLES);
@@ -123,11 +136,11 @@ void task_fft_calculation(void *params)
 
 		fft_sort_magnitudes(indexed_magnitudes, MAGNITUDES_SIZE);
 
-		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_FFT_CALC_STACK_SIZE - stack_hwm), TASK_FFT_CALC_STACK_SIZE);
+		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_FFT_CALC_STACK_SIZE - stack_hwm), TASK_FFT_CALC_STACK_SIZE);
 
-		ESP_LOGI(TAG, "FFT calculations complete");
+		// ESP_LOGI(TAG, "FFT calculations complete");
 		xTaskNotifyGive(notif_send_fft_components);
 	}
 }
@@ -141,17 +154,17 @@ void task_fft_send_components(void *params)
 	{
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-		uint32_t n_ms_components = fft_percentile_n_components(0, MAGNITUDES_SIZE);
+		uint32_t n_ms_components = fft_percentile_n_components(99, MAGNITUDES_SIZE);
 
 		int error_code = fft_send_ms_components_over_uart(fft_complex_arr, indexed_magnitudes, N_SAMPLES, n_ms_components);
 		if (error_code != 0)
 			ESP_LOGE(TAG, "Error %d", error_code);
 
-		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_FFT_STACK_SIZE - stack_hwm), TASK_SEND_FFT_STACK_SIZE);
+		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_FFT_STACK_SIZE - stack_hwm), TASK_SEND_FFT_STACK_SIZE);
 
-		ESP_LOGI(TAG, "FFT components sent");
+		// ESP_LOGI(TAG, "FFT components sent");
 		xTaskNotifyGive(notif_send_data_samples);
 	}
 }
@@ -167,19 +180,19 @@ void task_send_data_samples(void *params)
 
 		uart_write_bytes(uart_num, "\n", 1);
 		uart_write_bytes(uart_num, "\xfe\xfe\xfe\xfe\xff", 5);
-		// printf("\ndata*");
-		// for (size_t i = 0; i < N_SAMPLES; i++)
-		// {
-		// 	// printf("%.4f, ", data_sampled_x[i]);
-		// 	// uart_write_bytes(uart_num, (const char *)&data_sampled_x[i], sizeof(float));
-		// }
-		// printf("*data\n");
+		printf("\ndata*");
+		for (size_t i = 0; i < N_SAMPLES; i++)
+		{
+			// printf("%.4f, ", data_sampled[i]);
+			uart_write_bytes(uart_num, (const char *)&data_sampled[i], sizeof(float));
+		}
+		printf("*data\n");
 		uart_write_bytes(uart_num, "\xff\xfe\xfe\xfe\xfe", 5);
 
-		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_DATA_SAMPLES_STACK_SIZE - stack_hwm), TASK_SEND_DATA_SAMPLES_STACK_SIZE);
-		ESP_LOGI(TAG, "Data samples sent");
-		xTaskNotifyGive(notif_data_sampling);
+		// UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_DATA_SAMPLES_STACK_SIZE - stack_hwm), TASK_SEND_DATA_SAMPLES_STACK_SIZE);
+		// ESP_LOGI(TAG, "Data samples sent");
+		// xTaskNotifyGive(notif_data_sampling);
 	}
 }

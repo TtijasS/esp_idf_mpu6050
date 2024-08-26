@@ -24,7 +24,9 @@ extern TaskHandle_t notif_fft_calculation;
 extern TaskHandle_t notif_send_fft_components;
 extern TaskHandle_t notif_send_data_samples;
 
-extern float data_sampled_x[N_SAMPLES];
+extern float *data_sampled;
+extern indexed_float_type *indexed_magnitudes;
+extern float *fft_complex_arr;
 
 void task_initialization(void *params);
 void task_mpu6050_data_sampling(void *params);
