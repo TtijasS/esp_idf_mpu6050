@@ -10,7 +10,7 @@
 #include "my_uart_com.h"
 #include "data_structs.h"
 
-void fft_init();
+int fft_init();
 void fft_prepare_window(float *window_arr);
 void fft_prepare_complex_arr(float *sampled_data_arr, float *complex_arr, uint32_t arr_len);
 void fft_calculate_re_im(float *fft_components, uint32_t n_samples);

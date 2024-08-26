@@ -10,9 +10,8 @@
  * @param i2c_buffer_t: struct with write_buffer, read_buffer
  * @return void
  */
-void mpu_initial_setup(i2cBufferType *i2c_buffer_t)
+int mpu_initial_setup(i2cBufferType *i2c_buffer_t)
 {
-
     // Wake up the MPU6050
     i2c_buffer_t->write_buffer[0] = MPU_PWR_REG; // Power settings register
     i2c_buffer_t->write_buffer[1] = 0x00;        // wake up signal
@@ -55,6 +54,7 @@ void mpu_initial_setup(i2cBufferType *i2c_buffer_t)
 
     // i2c_buffer_t->write_buffer[0] = MPU_FIFO_EN_REG;
     // mpu_transmit_receive(i2c_buffer_t, 1, 1); // Should equal to MPU_FIFO_EN_MASK
+    return 0;
 }
 
 /**
@@ -73,21 +73,30 @@ void mpu_initial_setup(i2cBufferType *i2c_buffer_t)
  * @param write_buf_size: i2c_buffer_t.wirte_buffer size (how many values to transmit)
  * @param read_buf_size: i2c_buffer_t.read_buffer size (how many values to receive)
  *
- * @return void
+ * @return 0 OK
+ * @return -1 i2c write buffer size is too small
+ * @return -2 i2c read buffer is too small
+ * @return -3 i2c master failed to transmit receive data
  */
-void mpu_transmit_receive(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size, uint8_t read_buf_size)
+int mpu_transmit_receive(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size, uint8_t read_buf_size)
 {
+    int error_code = 0;
     if (sizeof(i2c_buffer_t->write_buffer) < write_buf_size)
     {
         ESP_LOGI(TAG, "The allocated i2c_buffer_t.write_buffer size is smaller than %d", write_buf_size);
-        return;
+        return -1;
     }
     if (sizeof(i2c_buffer_t->read_buffer) < read_buf_size)
     {
         ESP_LOGI(TAG, "The allocated i2c_buffer_t.read_buffer size is smaller than %d", read_buf_size);
-        return;
+        return -2;
     }
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(i2c_master_dev_handle, i2c_buffer_t->write_buffer, write_buf_size, i2c_buffer_t->read_buffer, read_buf_size, I2C_TIMEOUT_MS));
+    if((error_code = i2c_master_transmit_receive(i2c_master_dev_handle, i2c_buffer_t->write_buffer, write_buf_size, i2c_buffer_t->read_buffer, read_buf_size, I2C_TIMEOUT_MS)) != 0)
+    {
+        ESP_LOGE(TAG, "Falled to i2c master transmit receive, error %d", error_code);
+        return -3;
+    }
+    return 0;
 }
 
 /**
@@ -103,16 +112,23 @@ void mpu_transmit_receive(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size, u
  * @param i2c_buffer_t: struct with read_buffer, write_buffer
  * @param write_buf_size: i2c_buffer_t.wirte_buffer size (how many values to transmit)
  *
- * @return void
+ * @return 0 OK
+ * @return -1 Buffer size smaller than expected
+ * @return -2 i2c master trasmit failed
  */
-void mpu_transmit(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size)
+int mpu_transmit(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size)
 {
+    int error_code = 0;
     if (sizeof(i2c_buffer_t->write_buffer) < write_buf_size)
     {
         ESP_LOGI(TAG, "The allocated i2c_buffer_t.write_buffer size is smaller than %d", write_buf_size);
-        return;
+        return -1;
     }
-    ESP_ERROR_CHECK(i2c_master_transmit(i2c_master_dev_handle, i2c_buffer_t->write_buffer, write_buf_size, I2C_TIMEOUT_MS));
+    if ((error_code = i2c_master_transmit(i2c_master_dev_handle, i2c_buffer_t->write_buffer, write_buf_size, I2C_TIMEOUT_MS)) != ESP_OK)
+    {
+        return -2;
+    }
+    return 0;
 }
 
 /**

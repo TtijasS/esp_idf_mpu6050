@@ -12,6 +12,6 @@ extern const i2c_master_bus_config_t i2c_master_bus_config;
 extern const i2c_device_config_t i2c_master_device_config;
 extern i2c_master_bus_handle_t i2c_master_bus_handle;
 extern i2c_master_dev_handle_t i2c_master_dev_handle;
-void i2c_init();
+int i2c_init();
 
 #endif // MY_I2C_COM_H

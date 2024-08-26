@@ -29,13 +29,27 @@ i2c_master_dev_handle_t i2c_master_dev_handle;
  * Slave address of the MPU6050 sensor is 0x68
  *
  * @param void
- * @return void
+ * @return 0 OK
+ * @return -1 failed to create new master bus
+ * @return -2 failed to add new device to master bus
+ * @return -3 failed to probe the added device
  */
-void i2c_init()
+int i2c_init()
 {
+    int error_code = 0;
     // Initialize the I2C bus
-    ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_master_bus_config, &i2c_master_bus_handle));
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_master_bus_handle, &i2c_master_device_config, &i2c_master_dev_handle));
+    if((error_code = i2c_new_master_bus(&i2c_master_bus_config, &i2c_master_bus_handle)) != ESP_OK)
+    {
+        return -1;
+    }
+    if((error_code = i2c_master_bus_add_device(i2c_master_bus_handle, &i2c_master_device_config, &i2c_master_dev_handle)) != ESP_OK)
+    {
+        return -2;
+    }
     // Probe the slave device
-    ESP_ERROR_CHECK(i2c_master_probe(i2c_master_bus_handle, MPU_ADR_REG, I2C_TIMEOUT_MS));
+    if((error_code = i2c_master_probe(i2c_master_bus_handle, MPU_ADR_REG, I2C_TIMEOUT_MS)) != ESP_OK)
+    {
+        return -3;
+    }
+    return 0;
 }

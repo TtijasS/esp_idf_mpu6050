@@ -9,9 +9,9 @@
 #include <esp_log.h>
 
 // Functions prototypes
-void mpu_initial_setup(i2cBufferType *);
-void mpu_transmit_receive(i2cBufferType *, uint8_t, uint8_t);
-void mpu_transmit(i2cBufferType *, uint8_t);
+int mpu_initial_setup(i2cBufferType *);
+int mpu_transmit_receive(i2cBufferType *, uint8_t, uint8_t);
+int mpu_transmit(i2cBufferType *, uint8_t);
 void mpu_fifo_enable(i2cBufferType *);
 void mpu_fifo_reset(i2cBufferType *);
 uint16_t mpu_fifo_count(i2cBufferType *);
