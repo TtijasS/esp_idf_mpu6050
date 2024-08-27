@@ -14,9 +14,8 @@
 #include "mpu6050.h"
 #include "my_i2c_com.h"
 #include "data_structs.h"
-#include "my_uart_com.h"
 #include "my_fft.h"
-// #include "uart_isr_handler.h"
+#include "uart_isr_handler.h"
 
 extern TaskHandle_t notif_init;
 extern TaskHandle_t notif_data_sampling;
