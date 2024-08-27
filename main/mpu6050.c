@@ -8,37 +8,62 @@
  * The FIFO buffer is set to store accelerometer and gyroscope data.
  *
  * @param i2c_buffer_t: struct with write_buffer, read_buffer
- * @return void
+ * @return 0 OK
+ * @return -1 failed to set power settings
+ * @return -2 failed to set filter frequency
+ * @return -3 failed to set accel register
+ * @return -4 failed to set gyro register
+ * @return -5 failed to dissable fifo
+ * @return -6 failed to setup fifo eable registers (gyro accel)
  */
 int mpu_initial_setup(i2cBufferType *i2c_buffer_t)
 {
     // Wake up the MPU6050
     i2c_buffer_t->write_buffer[0] = MPU_PWR_REG; // Power settings register
     i2c_buffer_t->write_buffer[1] = 0x00;        // wake up signal
-    mpu_transmit(i2c_buffer_t, 2);
+    if (mpu_transmit(i2c_buffer_t, 2) != 0)
+    {
+        return -1;
+    }
 
     // Set filter freq
     i2c_buffer_t->write_buffer[0] = MPU_FILTER_FREQ_REG;  // Filter freq register
     i2c_buffer_t->write_buffer[1] = MPU_FILTER_FREQ_MASK; // Filter freq
-    mpu_transmit(i2c_buffer_t, 2);
+    if (mpu_transmit(i2c_buffer_t, 2) != 0)
+    {
+        return -2;
+    }
 
     // Set accelerometer full scale range
     i2c_buffer_t->write_buffer[0] = MPU_ACCEL_CFG_REG; // Accel register
     i2c_buffer_t->write_buffer[1] = MPU_ACCEL_FS_MASK; //  Accel register setting
-    mpu_transmit(i2c_buffer_t, 2);
-
+    if (mpu_transmit(i2c_buffer_t, 2) != 0)
+    {
+        return -3;
+    }
     // Set gyroscope full scale range
     i2c_buffer_t->write_buffer[0] = MPU_GYRO_CFG_REG; // Gyro register
     i2c_buffer_t->write_buffer[1] = MPU_GYRO_FS_MASK; // Gyro register setting
-    mpu_transmit(i2c_buffer_t, 2);
+    if (mpu_transmit(i2c_buffer_t, 2) != 0)
+    {
+        return -4;
+    }
 
-    // Set what data is stored in the FIFO buffer
-    i2c_buffer_t->write_buffer[0] = MPU_FIFO_EN_REG;  // Fifo enable register
-    i2c_buffer_t->write_buffer[1] = MPU_FIFO_EN_MASK; // Fifo enable gyro and accel data setting
-    mpu_transmit(i2c_buffer_t, 2);
+    // Dissable FIFO buffer
+    i2c_buffer_t->write_buffer[0] = MPU_USER_CTRL_REG;
+    i2c_buffer_t->write_buffer[1] = MPU_FIFO_DISSABLE;
+    if (mpu_transmit(i2c_buffer_t, 2) != 0)
+    {
+        return -5;
+    }
 
-    ESP_LOGI(TAG, "MPU setup complete");
-
+    // // Set what data is stored in the FIFO buffer
+    // i2c_buffer_t->write_buffer[0] = MPU_FIFO_EN_REG;  // Fifo enable register
+    // i2c_buffer_t->write_buffer[1] = MPU_FIFO_EN_MASK; // Fifo enable gyro and accel data setting
+    // if (mpu_transmit(i2c_buffer_t, 2) != 0)
+    // {
+    //     return -6;
+    // }
     // // Check the integrity of the configured registers
     // i2c_buffer_t->write_buffer[0] = MPU_PWR_REG;
     // mpu_transmit_receive(i2c_buffer_t, 1, 1); // Should be 0x00h (0d)
@@ -80,6 +105,8 @@ int mpu_initial_setup(i2cBufferType *i2c_buffer_t)
  */
 int mpu_transmit_receive(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size, uint8_t read_buf_size)
 {
+    const char *TAG = "MPU TRANSMIT RECEIVE";
+
     int error_code = 0;
     if (sizeof(i2c_buffer_t->write_buffer) < write_buf_size)
     {
@@ -91,7 +118,7 @@ int mpu_transmit_receive(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size, ui
         ESP_LOGI(TAG, "The allocated i2c_buffer_t.read_buffer size is smaller than %d", read_buf_size);
         return -2;
     }
-    if((error_code = i2c_master_transmit_receive(i2c_master_dev_handle, i2c_buffer_t->write_buffer, write_buf_size, i2c_buffer_t->read_buffer, read_buf_size, I2C_TIMEOUT_MS)) != 0)
+    if ((error_code = i2c_master_transmit_receive(i2c_master_dev_handle, i2c_buffer_t->write_buffer, write_buf_size, i2c_buffer_t->read_buffer, read_buf_size, I2C_TIMEOUT_MS)) != 0)
     {
         ESP_LOGE(TAG, "Falled to i2c master transmit receive, error %d", error_code);
         return -3;
@@ -118,6 +145,7 @@ int mpu_transmit_receive(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size, ui
  */
 int mpu_transmit(i2cBufferType *i2c_buffer_t, uint8_t write_buf_size)
 {
+    const char *TAG = "MPU TRANSMIT";
     int error_code = 0;
     if (sizeof(i2c_buffer_t->write_buffer) < write_buf_size)
     {
@@ -214,6 +242,7 @@ bool mpu_fifo_overflow_check(i2cBufferType *i2c_buffer_t)
  */
 bool mpu_fifo_read_extract(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t)
 {
+    const char *TAG = "MPU FIFO READ EXTRACT";
     // First read FIFO count to make sure it is at least 12 bytes long (accel and gyro high and low registers)
     if (I2C_READ_BUFF_SIZE < 12)
     {
@@ -239,17 +268,17 @@ bool mpu_fifo_read_extract(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t)
     return false;
 }
 
-
 /**
  * @brief Read and extract accel and gyro data directly from sencor registers (not from fifo)
- * 
+ *
  * @param i2c_buffer_t: struct with read_buffer, write_buffer
- * @param mpu_data_t: struct with accel_gyro_raw 
- * @return true 
- * @return false 
+ * @param mpu_data_t: struct with accel_gyro_raw
+ * @return true
+ * @return false
  */
 bool mpu_data_read_extract(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t)
 {
+    const char *TAG = "MPU DATA READ EXTRACT";
     if (I2C_READ_BUFF_SIZE < 14)
     {
         ESP_LOGI(TAG, "The allocated i2c_buffer_t.read_buffer size is smaller than 14");
@@ -268,13 +297,16 @@ bool mpu_data_read_extract(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t)
 
 /**
  * @brief Read and extract accel data from the sensor registers (not from fifo)
- * 
+ *
  * @param i2c_buffer_t: struct with read_buffer, write_buffer
- * @param mpu_data_t: struct with accel_gyro_raw 
- * @return true 
- * @return false 
+ * @param mpu_data_t: struct with accel_gyro_raw
+ * @return true
+ * @return false
  */
-bool mpu_data_read_extract_accel(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t){
+bool mpu_data_read_extract_accel(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t)
+{
+    const char *TAG = "MPU DATA READ EXTRACT ACCEL";
+    
     if (I2C_READ_BUFF_SIZE < 6)
     {
         ESP_LOGI(TAG, "The allocated i2c_buffer_t.read_buffer size is smaller than 6");
@@ -301,6 +333,7 @@ bool mpu_data_read_extract_accel(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_d
  */
 bool mpu_data_sum_error(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t, bool average_out)
 {
+    const char *TAG = "MPU DATA SUM ERR";
     if (sizeof(mpu_data_t->accel_gyro_raw) < 6 || sizeof(mpu_data_t->avg_err) < 6)
     {
         ESP_LOGI(TAG, "The allocated mpu_data_t.accel_gyro_raw or mpu_data_t.avg_err size is smaller than 6");
@@ -314,7 +347,6 @@ bool mpu_data_sum_error(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t, bo
         mpu_data_t->avg_err[i] += mpu_data_t->accel_gyro_raw[i];
         if (average_out)
             mpu_data_t->avg_err[i] /= 2;
-
     }
     return true;
 }
@@ -333,7 +365,7 @@ bool mpu_data_sum_error(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t, bo
  */
 bool mpu_data_calibrate(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t, uint8_t cycles)
 {
-
+    const char *TAG = "MPU DATA CALIBRATE";
     // First data reading
     if (!mpu_data_read_extract(i2c_buffer_t, mpu_data_t))
     {
@@ -412,9 +444,9 @@ void mpu_data_to_fs(mpuDataType *mpu_data_t, bool accel_only)
     mpu_data_t->accel_gyro_g[2] = (float)mpu_data_t->accel_gyro_raw[2] / MPU_ACCEL_FS; //  - mpu_data_t->avg_err[2]
     if (accel_only)
         return;
-    mpu_data_t->accel_gyro_g[3] = (float)mpu_data_t->accel_gyro_raw[3] / MPU_GYRO_FS;  //  - mpu_data_t->avg_err[3]
-    mpu_data_t->accel_gyro_g[4] = (float)mpu_data_t->accel_gyro_raw[4] / MPU_GYRO_FS;  //  - mpu_data_t->avg_err[4]
-    mpu_data_t->accel_gyro_g[5] = (float)mpu_data_t->accel_gyro_raw[5] / MPU_GYRO_FS;  //  - mpu_data_t->avg_err[5]
+    mpu_data_t->accel_gyro_g[3] = (float)mpu_data_t->accel_gyro_raw[3] / MPU_GYRO_FS; //  - mpu_data_t->avg_err[3]
+    mpu_data_t->accel_gyro_g[4] = (float)mpu_data_t->accel_gyro_raw[4] / MPU_GYRO_FS; //  - mpu_data_t->avg_err[4]
+    mpu_data_t->accel_gyro_g[5] = (float)mpu_data_t->accel_gyro_raw[5] / MPU_GYRO_FS; //  - mpu_data_t->avg_err[5]
 }
 
 /**
@@ -427,6 +459,7 @@ void mpu_data_to_fs(mpuDataType *mpu_data_t, bool accel_only)
  */
 bool mpu_calibrate(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t, uint8_t cycles, bool substract_err)
 {
+    const char *TAG = "MPU CALIBRATE";
     float avg_errors[6] = {0};
     for (int i = 0; i < 10; ++i)
     {
@@ -499,6 +532,7 @@ bool mpu_calibrate(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t, uint8_t
  */
 float *mpu_fifo_read_to_array(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data_t, float *readings_array, uint8_t array_size, bool subtract_err, bool average_out)
 {
+    const char *TAG = "MPU FIFO READ TO ARR";
     if (array_size < 6)
     {
         ESP_LOGI(TAG, "The readings_array size must be at least 6\n");
@@ -544,6 +578,7 @@ float *mpu_fifo_read_to_array(i2cBufferType *i2c_buffer_t, mpuDataType *mpu_data
  */
 void mpu_avg_err_divide(mpuDataType *mpu_data_t, uint16_t divisor)
 {
+    const char *TAG = "MPU AVG ERR DIV";
     if (divisor == 0)
     {
         ESP_LOGI(TAG, "Divisor can't be 0");
