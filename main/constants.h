@@ -1,8 +1,6 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-static const char *TAG = "MAIN APP";
-
 #define TASK_PRIORITY_SAMPLING 2
 #define TASK_PRIORITY_FFT 2
 #define TASK_PRIORITY_SORT 1
@@ -13,6 +11,9 @@ static const char *TAG = "MAIN APP";
 #define TASK_FFT_CALC_STACK_SIZE (512 * 5)
 #define TASK_SEND_FFT_STACK_SIZE (512 * 5)
 #define TASK_SEND_DATA_SAMPLES_STACK_SIZE (512 * 5)
+#define TASK_ISRUART_STACK_SIZE (1024 * 4)
+#define TASK_MSG_Q_STACK_SIZE (512 * 4)
+#define DEBUG_STACKS 0
 
 #define N_SAMPLES_32 32768					// set N_SAMPLES size
 #define N_SAMPLES_16 16384					// set N_SAMPLES size
@@ -32,7 +33,7 @@ static const char *TAG = "MAIN APP";
 
 // UART CONFIGURATION
 #define UART_BAUD_RATE 3000000 // UART baud rate
-#define UART_BUFFER_SIZE 1024 // UART buffer size
+#define UART_BUFFER_SIZE 1024  // UART buffer size
 
 // MPU REGISTERS FOR COMMUNICATION
 #define MPU_ADR_REG 0x68	  // MPU6050 slave address
@@ -59,6 +60,7 @@ static const char *TAG = "MAIN APP";
 // MPU SETTING MASKS
 #define MPU_FIFO_EN_MASK 0x78	 // Reg mask - use with MPU_FIFO_EN_REG; Enable gyro and acel in FIFO)
 #define MPU_FIFO_RESET_MASK 0x44 // Reg mask - use with MPU_USER_CTRL_REG; Reset FIFO and keep it enabled: 0x04 - fifo reset; 0x40 - fifo enable)
+#define MPU_FIFO_DISSABLE 0044 // Reg mask - use with MPU_USER_CTRL_REG; Reset FIFO and keep it dissabled: 0x04 - fifo reset; 0x40 - fifo enable)
 
 /**
  * @brief MPU FILTER FREQUENCY SETTINGS
