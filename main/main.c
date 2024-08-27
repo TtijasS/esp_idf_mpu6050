@@ -10,22 +10,22 @@
 #include "mpu6050.h"
 #include "my_i2c_com.h"
 #include "data_structs.h"
-#include "my_uart_com.h"
 #include "my_fft.h"
 #include "program_tasks.h"
+#include "uart_isr_handler.h"
 
 void app_main(void)
 {
+    const char *TAG = "MAIN APP";
     esp_log_level_set(TAG, ESP_LOG_DEBUG);
+	queue_msg_handle = xQueueCreate(4, sizeof(TaskQueueMessage_type));
 
-    xTaskCreatePinnedToCore(task_initialization, "Init task", TASK_INIT_STACK_SIZE, NULL, 10, &notif_init, tskNO_AFFINITY);
-    xTaskCreatePinnedToCore(task_mpu6050_data_sampling, "Data sampling task", TASK_MPU_SAMPLING_STACK_SIZE, NULL, 10, &notif_data_sampling, tskNO_AFFINITY);
-    xTaskCreate(task_fft_calculation, "FFT calculation task", TASK_FFT_CALC_STACK_SIZE, NULL, 10, &notif_fft_calculation);
-    xTaskCreate(task_fft_send_components, "Send FFT components task", TASK_SEND_FFT_STACK_SIZE, NULL, 10, &notif_send_fft_components);
-    xTaskCreate(task_send_data_samples, "Send data samples task", TASK_SEND_DATA_SAMPLES_STACK_SIZE, NULL, 10, &notif_send_data_samples);
+    if (xTaskCreatePinnedToCore(task_initialization, "Init task", TASK_INIT_STACK_SIZE, NULL, 10, NULL, tskNO_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Failed to create init task");
+    }
 
     // UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
     // ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-    xTaskNotifyGive(notif_init); // Start the init task after all the tasks get created and are put into suspended mode
     
 }
