@@ -8,6 +8,7 @@
  */
 int fft_init()
 {
+    const char *TAG = "FFT INIT";
     int error_code = 0;
     
     if((error_code = dsps_fft2r_init_fc32(NULL, N_SAMPLES)) != 0)
@@ -39,6 +40,7 @@ void fft_prepare_window(float *window_arr)
  */
 void fft_prepare_complex_arr(float *sampled_data_arr, float *complex_arr, uint32_t arr_len)
 {
+    const char *TAG = "FFT PREP COMPLEX ARR";
     if (sampled_data_arr == NULL || complex_arr == NULL)
     {
         ESP_LOGE(TAG, "Null pointer error in fft_prepare_complex_arr");
@@ -82,6 +84,7 @@ void fft_calculate_re_im(float *complex_arr, uint32_t n_samples)
  */
 void fft_calculate_magnitudes(indexed_float_type *indexed_magnitudes_arr, float *fft_complex_arr, uint32_t magnitudes_size)
 {
+    const char *TAG = "FFT CALC MAG";
     if (indexed_magnitudes_arr == NULL)
     {
         ESP_LOGE(TAG, "Null pointer error in fft_calculate_magnitudes");
@@ -294,6 +297,7 @@ int fft_prepare_complex_buffer(uint8_t *complex_buffer, size_t complex_size, uin
  */
 int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type *indexed_magnitudes, uint32_t n_samples, uint32_t n_ms_elements)
 {
+    const char *TAG = "FFT SEND MSC UART";
     int error_code = 0;
     uint8_t *metadata_buffer = NULL;
     uint8_t *indices_buffer = NULL;
@@ -358,7 +362,7 @@ int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type 
         goto memcleanup;
     }
 
-    if ((error_code = uart_send_fft_components(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
+    if ((error_code = fft_uart_transmit_data(UART_NUM, metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
     {
         ESP_LOGI(TAG, "error -8, sub error %d", error_code);
         error_code = -8;
@@ -384,6 +388,67 @@ memcleanup:
 }
 
 /**
+ * @brief UART write metadata, indices and complex data buffers with distinct separator flags
+ * 
+ * @param metadata_buffer metadata holding the number of readings and the number of most significant components information
+ * @param metadata_size size of metadata buffer
+ * @param indices_buffer indices of ms components
+ * @param indices_size size of indices buffer
+ * @param complex_data_buffer real and complex parts of ms components
+ * @param complex_size size of complex data buffer
+ * @return 0 OK
+ * @return -1 NULL operators passed
+ * @return -2 failed to write metadata buffer
+ * @return -3 failed to write indices buffer
+ * @return -4 failed to write complex data buffer
+ */
+int fft_uart_transmit_data(uart_port_t uart_num, uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size)
+{
+    if (metadata_buffer == NULL || indices_buffer == NULL || magnitudes_buffer == NULL || complex_data_buffer == NULL)
+    {
+        return -1;
+    }
+    const char* TAG = "SEND FFT";
+    esp_log_level_set(TAG, ESP_LOG_INFO);
+    // ESP_LOGI(TAG, "metadata_size: %u, data_size: %u", metadata_size, data_size);
+    // Send metadata
+    uart_write_bytes(uart_num, "\xfa\xfa\xfa\xfa\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)metadata_buffer, metadata_size) == -1)
+    {
+        return -2;
+    }
+    uart_write_bytes(uart_num, "\xff\xfa\xfa\xfa\xfa", 5); // End of transmission
+    uart_write_bytes(uart_num, "\n", 1);
+    // Send indices
+    uart_write_bytes(uart_num, "\xfb\xfb\xfb\xfb\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)indices_buffer, indices_size) == -1)
+    {
+        return -3;
+    }
+    uart_write_bytes(uart_num, "\xff\xfb\xfb\xfb\xfb", 5); // End of transmission
+    uart_write_bytes(uart_num, "\n", 1);
+
+    // Send magnitudes
+    uart_write_bytes(uart_num, "\xfc\xfc\xfc\xfc\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, magnitudes_buffer, magnitudes_size) == -1)
+    {
+        return -4;
+    }
+    uart_write_bytes(uart_num, "\xff\xfc\xfc\xfc\xfc", 5); // End of transmission
+    uart_write_bytes(uart_num, "\n", 1);
+    
+    // Send complex data
+    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)complex_data_buffer, complex_size) == -1)
+    {
+        return -5;
+    }
+    uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xfd", 5); // End of transmission
+    uart_write_bytes(uart_num, "\n", 1);
+    return 0;
+}
+
+/**
  * @brief Printing the metadata and data buffer for debugging purposes
  *
  * @param metadata_buffer: buffer with metadata uint8_t values
@@ -395,6 +460,7 @@ memcleanup:
  */
 int fft_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size)
 {
+    const char *TAG = "FFT DEBUG UART BUFF";
     if (metadata_buffer == NULL || indices_buffer == NULL || magnitudes_buffer == NULL || complex_data_buffer == NULL)
     {
         return -1;
