@@ -18,8 +18,7 @@ void app_main(void)
 {
     const char *TAG = "MAIN APP";
     esp_log_level_set(TAG, ESP_LOG_DEBUG);
-	queue_msg_handle = xQueueCreate(4, sizeof(TaskQueueMessage_type));
-
+	
     if (xTaskCreatePinnedToCore(task_initialization, "Init task", TASK_INIT_STACK_SIZE, NULL, 10, NULL, tskNO_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Failed to create init task");
