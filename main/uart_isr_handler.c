@@ -1,6 +1,5 @@
 #include "uart_isr_handler.h"
-QueueHandle_t uart_event_queue_handle;
-QueueHandle_t queue_msg_handle;
+
 
 uart_config_t uart_config = {
 	.baud_rate = UART_BAUD,
@@ -184,7 +183,7 @@ int message_send_to_queue(uint8_t *message, size_t message_size)
 	memcpy(message_to_queue.msg_ptr, message, message_size * sizeof(uint8_t));
 
 	// Send the message to queue
-	if (xQueueSend(queue_msg_handle, &message_to_queue, portMAX_DELAY) != pdTRUE)
+	if (xQueueSend(queue_enqueued_msg_processing, &message_to_queue, portMAX_DELAY) != pdTRUE)
 	{
 		free(message_to_queue.msg_ptr);
 		return -3;
@@ -307,79 +306,3 @@ memcleanup:
 	return error_code;
 }
 
-void task_uart_isr_monitoring(void *params)
-{
-	const char *TAG = "UART ISR TASK";
-
-	uart_event_t uart_event;
-	int error_flag = 0;
-	int encapsulation_counter = 0;
-
-	while (1)
-	{
-		// Receive the entire uart_event_t structure from the queue
-		if (xQueueReceive(uart_event_queue_handle, (void *)&uart_event, portMAX_DELAY) == pdTRUE)
-		{
-			switch (uart_event.type)
-			{
-			/**
-			 * @brief Pattern detection case
-			 *
-			 * Multiple identical characters of specific type detected in a row.
-			 * Number of chars is defined with macro UART_PATTERN_SIZE
-			 */
-			case UART_PATTERN_DET:
-				int pattern_index = uart_pattern_pop_pos(UART_NUM);
-				if (pattern_index == -1)
-				{
-					ESP_LOGE(TAG, "Pattern index -1");
-					break;
-				}
-				if ((error_flag = uart_encapsulation_handler(UART_NUM, &encapsulation_counter, &pattern_index)) < 0)
-				{
-					ESP_LOGE(TAG, "Uart encapsulation handler error %d", error_flag);
-				}
-				break;
-
-			default:
-				break;
-			}
-		}
-	}
-	ESP_LOGW(TAG, "KILLING THE UART ISR TASK");
-	vTaskDelete(NULL);
-}
-
-void task_queue_msg_handler(void *params)
-{
-	const char *TAG = "TSK QUEUE MSG HANDL";
-	TaskQueueMessage_type enqueued_message;
-
-	const char *SAMPLING_STARTED = "Sampling started";
-
-	while (1)
-	{
-		if (xQueueReceive(queue_msg_handle, &enqueued_message, portMAX_DELAY))
-		{
-			if (enqueued_message.msg_ptr != NULL)
-			{
-				if (memcmp(enqueued_message.msg_ptr, "START", strlen("START")))
-				{
-					uart_write_bytes(UART_NUM, SAMPLING_STARTED, strlen(SAMPLING_STARTED));
-					// xTaskNotifyGive(notif_data_sampling)
-				}
-				else if (uart_write_bytes(UART_NUM, enqueued_message.msg_ptr, enqueued_message.msg_size) == -1)
-				{
-					ESP_LOGE(TAG, "Failed to write bytes");
-				}
-
-				// Free the message memory
-				free(enqueued_message.msg_ptr);
-			}
-			else
-			{
-				ESP_LOGE(TAG, "Null pointer passed");
-			}
-		}
-	}
-}

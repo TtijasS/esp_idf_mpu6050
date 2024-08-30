@@ -7,11 +7,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "program_tasks.h"
 
-#define UART_BAUD 115200
+#define UART_BAUD 3000000
 #define UART_NUM UART_NUM_1
 #define UART_RX_BUFF_SIZE 1024*4
 #define UART_TX_BUFF_SIZE 0
@@ -25,23 +26,16 @@
 #define UART_PATTERN_SIZE (strlen((const char*)ENCAP_START_PAT) - 1)
 #define ENCAP_FLAG_SIZE strlen((const char*)ENCAP_START_PAT)
 
-// Queueu handles
-extern QueueHandle_t uart_event_queue_handle;
-extern QueueHandle_t queue_msg_handle;
 // Uart config struct
 extern uart_config_t uart_config;
 
-typedef struct TaskQueueMessage_type
-{
-	size_t msg_size;
-	uint8_t *msg_ptr;
-	
-}TaskQueueMessage_type;
-
-
 // init uart
 int uart_init_with_isr_queue(uart_config_t *uart_config, uart_port_t port_num, int gpio_tx, int gpio_rx, int tx_buff_size, int rx_buff_size, QueueHandle_t *isr_queue_handle, int isr_queue_size, int intr_alloc_flags);
+int uart_encapsulation_start_flag_handler(uart_port_t uart_num, int pattern_index);
+int uart_encapsulation_end_flag_handler(uart_port_t uart_num, int pattern_index);
+int uart_encapsulated_message_handler(uart_port_t uart_num, uint8_t *message_buf, int message_size);
+int message_send_to_queue(uint8_t *message, size_t message_size);
+int uart_encapsulation_handler(uart_port_t uart_num, int *encap_state, int *pattern_index);
 
-void task_uart_isr_monitoring(void *);
-void task_queue_msg_handler(void *);
+
 #endif // UART_ISR_HANDLER_H
