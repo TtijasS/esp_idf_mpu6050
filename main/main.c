@@ -11,7 +11,7 @@
 #include "my_i2c_com.h"
 #include "data_structs.h"
 #include "my_fft.h"
-#include "program_tasks.h"
+#include "app_tasks.h"
 #include "uart_isr_handler.h"
 
 void app_main(void)

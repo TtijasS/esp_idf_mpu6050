@@ -10,11 +10,11 @@
 #include "freertos/semphr.h"
 #include "driver/uart.h"
 #include "esp_log.h"
-#include "program_tasks.h"
+#include "app_tasks.h"
 
 #define UART_BAUD 3000000
 #define UART_NUM UART_NUM_1
-#define UART_RX_BUFF_SIZE 1024*4
+#define UART_RX_BUFF_SIZE 1024
 #define UART_TX_BUFF_SIZE 0
 #define UART_EVENT_QUEUE_SIZE 10 /*!< Number of UART ISR events queued*/
 #define UART_PAT_QUEUE_SIZE 8 /*!< Number of queued pattern index positions*/

@@ -1,4 +1,4 @@
-#include "program_tasks.h"
+#include "app_tasks.h"
 
 TaskHandle_t handl_mpu_sampling_begin;
 TaskHandle_t handl_fft_calculation;
@@ -237,8 +237,8 @@ void task_fft_calculation(void *params)
 {
 	const char *TAG = "TSK FFT CALC";
 	esp_log_level_set(TAG, ESP_LOG_ERROR);
-	const char *MSG_A = "FFT RDY A"; // FFT data A ready
-	const char *MSG_B = "FFT RDY B"; // FFT data B ready
+	const char *MSG_A = "FFT RDY A\n"; // FFT data A ready
+	const char *MSG_B = "FFT RDY B\n"; // FFT data B ready
 	FFTQueueMessage_type data_in_queue;
 
 	while (1)

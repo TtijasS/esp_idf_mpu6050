@@ -56,6 +56,7 @@ extern float *data_samples_b;
 extern indexed_float_type *indexed_magnitudes;
 extern float *fft_complex_arr;
 
+
 void task_initialization(void *params);
 void task_mpu6050_data_sampling(void *params);
 void task_fft_calculation(void *params);
