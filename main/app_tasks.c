@@ -160,8 +160,8 @@ void task_initialization(void *params)
 void task_mpu6050_data_sampling(void *params)
 {
 	const char *TAG = "TSK DATA SAMPL";
-	const char *MSG_A = "A SMPL RDY";	 // Data samples A ready
-	const char *MSG_B = "B SMPL RDY";	 // Data samples B ready
+	const char *MSG_A_RDY = "A DATRDY";	 // Data samples A ready
+	const char *MSG_B_RDY = "B DATRDY";	 // Data samples B ready
 	const char *MPU_ERR_MSG = "MPU ERR"; // MPU reading data error
 	esp_log_level_set(TAG, ESP_LOG_ERROR);
 	UBaseType_t old_free_heap = 0;
@@ -198,7 +198,7 @@ void task_mpu6050_data_sampling(void *params)
 				// Raise data A ready flag and stop updating A
 				else
 				{
-					uart_write_bytes(UART_NUM, MSG_A, strlen(MSG_A));
+					uart_write_bytes(UART_NUM, MSG_A_RDY, strlen(MSG_A_RDY));
 					index_a = 0;
 					sampling_a = false;
 					fft_ready_a = false;
@@ -218,7 +218,7 @@ void task_mpu6050_data_sampling(void *params)
 				// Raise data B ready flag and stop updating B
 				else
 				{
-					uart_write_bytes(UART_NUM, MSG_B, strlen(MSG_B));
+					uart_write_bytes(UART_NUM, MSG_B_RDY, strlen(MSG_B_RDY));
 					index_b = 0;
 					sampling_b = false;
 					fft_ready_b = false;
@@ -237,8 +237,8 @@ void task_fft_calculation(void *params)
 {
 	const char *TAG = "TSK FFT CALC";
 	esp_log_level_set(TAG, ESP_LOG_ERROR);
-	const char *MSG_A = "FFT RDY A\n"; // FFT data A ready
-	const char *MSG_B = "FFT RDY B\n"; // FFT data B ready
+	const char *MSG_A_RDY = "A FFTRDY"; // FFT data A ready
+	const char *MSG_B_RDY = "B FFTRDY"; // FFT data B ready
 	FFTQueueMessage_type data_in_queue;
 
 	while (1)
@@ -269,13 +269,13 @@ void task_fft_calculation(void *params)
 			{
 				fft_ready_a = true;
 				fft_ready_b = false;
-				uart_write_bytes(UART_NUM, MSG_A, strlen(MSG_A));
+				uart_write_bytes(UART_NUM, MSG_A_RDY, strlen(MSG_A_RDY));
 			}
 			else
 			{
 				fft_ready_a = false;
 				fft_ready_b = true;
-				uart_write_bytes(UART_NUM, MSG_B, strlen(MSG_B));
+				uart_write_bytes(UART_NUM, MSG_B_RDY, strlen(MSG_B_RDY));
 			}
 			xTaskNotifyGive(handl_uart_fft_components);
 		}
@@ -404,22 +404,25 @@ void task_queue_msg_handler(void *params)
 	const char *A_START = "A START";
 	const char *B_START = "B START";
 	// STARTED SAMPLING CONFIRMATION
-	const char *A_SMPL = "A SMPL";
-	const char *B_SMPL = "B SMPL";
+	const char *A_SAMPLING = "A SAMPLING";
+	const char *B_SAMPLING = "B SAMPLING";
 	// SEND DATA
 	const char *A_SEND = "A SEND";
 	const char *B_SEND = "B SEND";
 	// SAMPLING BUSY
-	const char *A_SMPL_BUSY = "A SMPL BUSY";
-	const char *B_SMPL_BUSY = "B SMPL BUSY";
+	const char *A_BUSY = "A BUSY";
+	const char *B_BUSY = "B BUSY";
+	// CONFIRMING DATA SEND
+	const char *A_OK = "A OK";
+	const char *B_OK = "B OK";
 	// DATA NOT READY
-	const char *A_DAT_NRDY = "A DAT NRDY";
-	const char *B_DAT_NRDY = "B DAT NRDY";
+	const char *A_NOTRDY = "A NOTRDY";
+	const char *B_NOTRDY = "B NOTRDY";
 	// COMMON
-	const char *UART_BUSY = "UART BUSY";
-	const char *OK = "OK";
-	const char *OK_FFT = "OK FFT";
+	const char *FFT = "FFT";
 	const char *FAIL = "FAIL";
+	// When data is ready sampling task sends A DATRDY or B DATRDY
+	// When FFT is done calculating, fft task sends A FFTOK or B FFTOK
 
 	while (1)
 	{
@@ -432,7 +435,7 @@ void task_queue_msg_handler(void *params)
 				{
 					if (xSemaphoreTake(semphr_sampling_request_a, pdMS_TO_TICKS(10)) == pdTRUE)
 					{
-						uart_write_bytes(UART_NUM, A_SMPL, strlen(A_SMPL));
+						uart_write_bytes(UART_NUM, A_SAMPLING, strlen(A_SAMPLING));
 						data_ready_a = false;
 						fft_ready_a = false;
 						if (!sampling_a && !sampling_b)
@@ -451,7 +454,7 @@ void task_queue_msg_handler(void *params)
 					}
 					else
 					{
-						uart_write_bytes(UART_NUM, A_SMPL_BUSY, strlen(A_SMPL_BUSY));
+						uart_write_bytes(UART_NUM, A_BUSY, strlen(A_BUSY));
 					}
 				}
 				// B START
@@ -459,7 +462,7 @@ void task_queue_msg_handler(void *params)
 				{
 					if (xSemaphoreTake(semphr_sampling_request_b, pdMS_TO_TICKS(10)) == pdTRUE)
 					{
-						uart_write_bytes(UART_NUM, B_SMPL, strlen(B_SMPL));
+						uart_write_bytes(UART_NUM, B_SAMPLING, strlen(B_SAMPLING));
 						data_ready_b = false;
 						fft_ready_b = false;
 						if (!sampling_a && !sampling_b)
@@ -476,7 +479,7 @@ void task_queue_msg_handler(void *params)
 					}
 					else
 					{
-						uart_write_bytes(UART_NUM, B_SMPL_BUSY, strlen(B_SMPL_BUSY));
+						uart_write_bytes(UART_NUM, B_BUSY, strlen(B_BUSY));
 					}
 				}
 				// A SEND
@@ -487,21 +490,23 @@ void task_queue_msg_handler(void *params)
 						
 						if (fft_ready_a)
 						{
-							uart_write_bytes(UART_NUM, OK, strlen(OK));
+							uart_write_bytes(UART_NUM, A_OK, strlen(A_OK));
 							xTaskNotifyGive(handl_uart_fft_components);
 						}
 						else if (xQueueSend(queue_fft_calculation, &fft_queue_msg_a, 0) == pdTRUE)
 						{
-							uart_write_bytes(UART_NUM, OK_FFT, strlen(OK_FFT));
+							uart_write_bytes(UART_NUM, A_OK, strlen(A_OK));
+							uart_write_bytes(UART_NUM, FFT, strlen(FFT));
 						}
 						else
 						{
+							uart_write_bytes(UART_NUM, FFT, strlen(FFT));
 							uart_write_bytes(UART_NUM, FAIL, strlen(FAIL));
 						}
 					}
 					else
 					{
-						uart_write_bytes(UART_NUM, A_DAT_NRDY, strlen(A_DAT_NRDY));
+						uart_write_bytes(UART_NUM, A_NOTRDY, strlen(A_NOTRDY));
 					}
 				}
 				// B SEND
@@ -511,26 +516,28 @@ void task_queue_msg_handler(void *params)
 					{
 						if (fft_ready_b)
 						{
-							uart_write_bytes(UART_NUM, OK, strlen(OK));
+							uart_write_bytes(UART_NUM, B_OK, strlen(B_OK));
 							xTaskNotifyGive(handl_uart_fft_components);
 						}
 						else if (xQueueSend(queue_fft_calculation, &fft_queue_msg_b, 0) == pdTRUE)
 						{
-							uart_write_bytes(UART_NUM, OK_FFT, strlen(OK_FFT));
+							uart_write_bytes(UART_NUM, B_OK, strlen(B_OK));
+							uart_write_bytes(UART_NUM, FFT, strlen(FFT));
 						}
 						else
 						{
+							uart_write_bytes(UART_NUM, FFT, strlen(FFT));
 							uart_write_bytes(UART_NUM, FAIL, strlen(FAIL));
 						}
 					}
 					else
 					{
-						uart_write_bytes(UART_NUM, B_DAT_NRDY, strlen(B_DAT_NRDY));
+						uart_write_bytes(UART_NUM, B_NOTRDY, strlen(B_NOTRDY));
 					}
 				}
 				else
 				{
-					uart_write_bytes(UART_NUM, "?? ", strlen("?? "));
+					uart_write_bytes(UART_NUM, "?>", strlen("?>"));
 					uart_write_bytes(UART_NUM, enqueued_message.msg_ptr, enqueued_message.msg_size);
 				}
 				free(enqueued_message.msg_ptr);
