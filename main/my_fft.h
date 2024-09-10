@@ -20,10 +20,15 @@ void fft_plot_magnitudes(indexed_float_type *indexed_magnitudes, uint32_t length
 int compare_indexed_float_type_descending(const void *, const void *);
 uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len);
 int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, size_t metadata_size, uint32_t n_samples, uint32_t n_components);
-int fft_prepare_magnitudes_buffer(uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, indexed_float_type *indexed_magnitudes, uint32_t n_ms_components);
+int fft_prepare_indices_buffer(uint8_t *indices_buffer, size_t indices_size, indexed_float_type *indexed_magnitudes, uint32_t n_ms_components);
 int fft_prepare_complex_buffer(uint8_t *complex_data_buffer, size_t complex_size, uint32_t n_fft_components, indexed_float_type *indexed_mangitudes, float *fft_components);
 int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type *indexed_magnitudes, uint32_t n_samples, uint32_t n_ms_elements);
-int fft_uart_transmit_data(uart_port_t uart_num, uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size);
+int fft_uart_transmit_data(uart_port_t uart_num, uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size);
+
+// Debugging functions
+int fft_prepare_indices_magnitudes_buffer_debugging(uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, indexed_float_type *indexed_magnitudes, uint32_t n_ms_components);
+int fft_send_ms_components_over_uart_debugging(float *fft_complex_arr, indexed_float_type *indexed_magnitudes, uint32_t n_samples, uint32_t n_ms_elements);
+int fft_uart_transmit_data_debugging(uart_port_t uart_num, uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size);
 int fft_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size);
 
 #endif // MY_FFT_H

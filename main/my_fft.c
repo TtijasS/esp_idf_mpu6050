@@ -4,16 +4,16 @@
  * @brief Perform dsps fft init process
  *
  * @return 0 OK
- * @return -1 fft init error 
+ * @return -1 fft init error
  */
 int fft_init()
 {
-    const char *TAG = "FFT INIT";
+    const char *TAG = "fft_init";
     int error_code = 0;
-    
-    if((error_code = dsps_fft2r_init_fc32(NULL, N_SAMPLES)) != 0)
+
+    if ((error_code = dsps_fft2r_init_fc32(NULL, N_SAMPLES)) != 0)
     {
-        ESP_LOGE(TAG, "Error in FFT init: %d", error_code);
+        ESP_LOGE(TAG, "FFT init error_code: %d", error_code);
         return -1;
     }
     return 0;
@@ -40,10 +40,10 @@ void fft_prepare_window(float *window_arr)
  */
 void fft_prepare_complex_arr(float *sampled_data_arr, float *complex_arr, uint32_t arr_len)
 {
-    const char *TAG = "FFT PREP COMPLEX ARR";
+    const char *TAG = "fft_prepare_complex_arr";
     if (sampled_data_arr == NULL || complex_arr == NULL)
     {
-        ESP_LOGE(TAG, "Null pointer error in fft_prepare_complex_arr");
+        ESP_LOGE(TAG, "Null pointers passed");
         return;
     }
     // Prepare fft_complex_arr array
@@ -84,16 +84,16 @@ void fft_calculate_re_im(float *complex_arr, uint32_t n_samples)
  */
 void fft_calculate_magnitudes(indexed_float_type *indexed_magnitudes_arr, float *fft_complex_arr, uint32_t magnitudes_size)
 {
-    const char *TAG = "FFT CALC MAG";
+    const char *TAG = "fft_calculate_magnitudes";
     if (indexed_magnitudes_arr == NULL)
     {
-        ESP_LOGE(TAG, "Null pointer error in fft_calculate_magnitudes");
+        ESP_LOGE(TAG, "Null pointers passed");
         return;
     }
 
     if (magnitudes_size == 0)
     {
-        ESP_LOGE(TAG, "Array length is zero in fft_calculate_magnitudes");
+        ESP_LOGE(TAG, "Magnitudes size == 0");
         return;
     }
 
@@ -182,7 +182,7 @@ uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len)
  */
 int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, size_t metadata_size, uint32_t n_samples, uint32_t n_components)
 {
-    const char *TAG = "META PREP";
+    const char *TAG = "fft_prepare_metadata_buffer";
     esp_log_level_set(TAG, ESP_LOG_INFO);
 
     if (metadata_buffer == NULL)
@@ -203,18 +203,14 @@ int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, size_t metadata_size, 
  *
  * @param indices_buffer uart buffer for indices
  * @param indices_size size of indices buffer
- * @param magnitudes_buffer uart buffer for magnitudes
- * @param magnitudes_size size of magnitudes buffer
  * @param n_ms_components number of fft components
  * @return 0 OK
  * @return -1 NULL pointers passed
  * @return -2 indices buffer size too small
- * @return -3 magnitudes buffer size too small
- * @return -4 indices_size != magnitudes_size
  */
-int fft_prepare_magnitudes_buffer(uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, indexed_float_type *indexed_magnitudes, uint32_t n_ms_components)
+int fft_prepare_indices_buffer(uint8_t *indices_buffer, size_t indices_size, indexed_float_type *indexed_magnitudes, uint32_t n_ms_components)
 {
-    if (indices_buffer == NULL || magnitudes_buffer == NULL || indexed_magnitudes == NULL)
+    if (indices_buffer == NULL || indexed_magnitudes == NULL)
     {
         return -1;
     }
@@ -222,19 +218,10 @@ int fft_prepare_magnitudes_buffer(uint8_t *indices_buffer, size_t indices_size, 
     {
         return -2;
     }
-    if (magnitudes_size < (4 * n_ms_components))
-    {
-        return -3;
-    }
-    if (indices_size != magnitudes_size)
-    {
-        return -4;
-    }
 
     for (uint32_t i = 0; i < n_ms_components; i++)
     {
         memcpy(&indices_buffer[i * sizeof(uint32_t)], &indexed_magnitudes[i].index, sizeof(uint32_t));
-        memcpy(&magnitudes_buffer[i * sizeof(float)], &indexed_magnitudes[i].value, sizeof(float));
     }
     return 0;
 }
@@ -287,6 +274,201 @@ int fft_prepare_complex_buffer(uint8_t *complex_buffer, size_t complex_size, uin
  * @param n_ms_elements number of most significant elements
  * @return 0 OK
  * @return -1 failed to malloc metadata buffer
+ * @return -3 failed to malloc indices buffer
+ * @return -5 failed to malloc complex buffer
+ * @return -2 failed to prepare metadata buffer
+ * @return -6 failed to prepare indices buffer
+ * @return - failed to prepare complex buffer
+ * @return -7 failed to UART write buffers
+ * @return -8 failed to debug UART buffers
+ */
+int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type *indexed_magnitudes, uint32_t n_samples, uint32_t n_ms_elements)
+{
+    const char *TAG = "fft_send_ms_components_over_uart";
+    int error_code = 0;
+    uint8_t *metadata_buffer = NULL;
+    uint8_t *indices_buffer = NULL;
+    uint8_t *complex_buffer = NULL;
+
+    // Metadata buffer
+    size_t metadata_size = 2 * sizeof(uint32_t);
+    metadata_buffer = (uint8_t *)malloc(metadata_size);
+    if (metadata_buffer == NULL)
+    {
+        error_code = -1;
+        goto memcleanup;
+    }
+
+    // Most significant indices buffer
+    size_t indices_size = n_ms_elements * sizeof(uint32_t);
+    indices_buffer = (uint8_t *)malloc(indices_size);
+    if (indices_buffer == NULL)
+    {
+        error_code = -2;
+        goto memcleanup;
+    }
+
+    // Complex data buffer
+    size_t complex_size = 2 * n_ms_elements * sizeof(float);
+    complex_buffer = (uint8_t *)malloc(complex_size);
+    if (complex_buffer == NULL)
+    {
+        error_code = -3;
+        goto memcleanup;
+    }
+
+    // metadata_buffer = {n_samples, n_ms_elements}
+    if ((error_code = fft_prepare_metadata_buffer(metadata_buffer, metadata_size, n_samples, n_ms_elements)) != 0)
+    {
+        // We save sub_error into error_code and ESP_LOGE both
+        ESP_LOGE(TAG, "error -4, sub error %d", error_code);
+        // then we overwrite the error_code with the -n
+        error_code = -4;
+        goto memcleanup;
+    }
+
+    // indices_buffer holds the indices of the sorted indexed_magnitudes
+    if ((error_code = fft_prepare_indices_buffer(indices_buffer, indices_size, indexed_magnitudes, n_ms_elements)) != 0)
+    {
+        ESP_LOGE(TAG, "error -5, sub error %d", error_code);
+        error_code = -5;
+        goto memcleanup;
+    }
+
+    // Complex buffer holds the pairs of re and im numbers that are located @ indices of the sorted magnitude array
+    if ((error_code = fft_prepare_complex_buffer(complex_buffer, complex_size, n_ms_elements, indexed_magnitudes, fft_complex_arr)) != 0)
+    {
+        ESP_LOGE(TAG, "error -6, sub error %d", error_code);
+        error_code = -6;
+        goto memcleanup;
+    }
+
+    // Transmit the buffers with specific encapsulation bytes
+    if ((error_code = fft_uart_transmit_data(UART_NUM, metadata_buffer, metadata_size, indices_buffer, indices_size, complex_buffer, complex_size)) != 0)
+    {
+        ESP_LOGE(TAG, "error -7, sub error %d", error_code);
+        error_code = -7;
+        goto memcleanup;
+    }
+
+memcleanup:
+    if (metadata_buffer != NULL)
+        free(metadata_buffer);
+    if (indices_buffer != NULL)
+        free(indices_buffer);
+    if (complex_buffer != NULL)
+        free(complex_buffer);
+    return error_code;
+}
+
+/**
+ * @brief UART write metadata, indices and complex data buffers with distinct separator flags
+ *
+ * @param metadata_buffer metadata holding the number of readings and the number of most significant components information
+ * @param metadata_size size of metadata buffer
+ * @param indices_buffer indices of ms components
+ * @param indices_size size of indices buffer
+ * @param complex_data_buffer real and complex parts of ms components
+ * @param complex_size size of complex data buffer
+ * @return 0 OK
+ * @return -1 NULL pointers passed
+ * @return -2 failed to write metadata buffer
+ * @return -3 failed to write indices buffer
+ * @return -4 failed to write complex data buffer
+ */
+int fft_uart_transmit_data(uart_port_t uart_num, uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size)
+{
+    const char *TAG = "fft_uart_transmit_data";
+    esp_log_level_set(TAG, ESP_LOG_INFO);
+
+    if (metadata_buffer == NULL || indices_buffer == NULL || complex_data_buffer == NULL)
+    {
+        return -1;
+    }
+
+    // --- Send metadata (xfa)
+    uart_write_bytes(uart_num, "\xfa\xfa\xfa\xfa\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)metadata_buffer, metadata_size) == -1)
+    {
+        return -2;
+    }
+    uart_write_bytes(uart_num, "\xff\xfa\xfa\xfa\xfa", 5); // End of transmission
+
+    // --- Send indices (xfb)
+    uart_write_bytes(uart_num, "\xfb\xfb\xfb\xfb\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)indices_buffer, indices_size) == -1)
+    {
+        return -3;
+    }
+    uart_write_bytes(uart_num, "\xff\xfb\xfb\xfb\xfb", 5); // End of transmission
+
+    // --- Send complex data (xfc)
+    uart_write_bytes(uart_num, "\xfc\xfc\xfc\xfc\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, (const char *)complex_data_buffer, complex_size) == -1)
+    {
+        return -4;
+    }
+    uart_write_bytes(uart_num, "\xff\xfc\xfc\xfc\xfc", 5); // End of transmission
+
+    return 0;
+}
+
+
+//////////////////////////////////////////////////////////////////
+// -------------------- DEBUGGING FUNCTIONS --------------------//
+//////////////////////////////////////////////////////////////////
+
+
+/**
+ * @brief Prepare most significant magnitudes and their indices to send over uart
+ *
+ * @param indices_buffer uart buffer for indices
+ * @param indices_size size of indices buffer
+ * @param magnitudes_buffer uart buffer for magnitudes
+ * @param magnitudes_size size of magnitudes buffer
+ * @param n_ms_components number of fft components
+ * @return 0 OK
+ * @return -1 NULL pointers passed
+ * @return -2 indices buffer size too small
+ * @return -3 magnitudes buffer size too small
+ * @return -4 indices_size != magnitudes_size
+ */
+int fft_prepare_indices_magnitudes_buffer_debugging(uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, indexed_float_type *indexed_magnitudes, uint32_t n_ms_components)
+{
+    if (indices_buffer == NULL || magnitudes_buffer == NULL || indexed_magnitudes == NULL)
+    {
+        return -1;
+    }
+    if (indices_size < (4 * n_ms_components))
+    {
+        return -2;
+    }
+    if (magnitudes_size < (4 * n_ms_components))
+    {
+        return -3;
+    }
+    if (indices_size != magnitudes_size)
+    {
+        return -4;
+    }
+
+    for (uint32_t i = 0; i < n_ms_components; i++)
+    {
+        memcpy(&indices_buffer[i * sizeof(uint32_t)], &indexed_magnitudes[i].index, sizeof(uint32_t));
+        memcpy(&magnitudes_buffer[i * sizeof(float)], &indexed_magnitudes[i].value, sizeof(float));
+    }
+    return 0;
+}
+
+/**
+ * @brief Send the first n components (magnitude, re, im) of DFFT calculation
+ *
+ * @param fft_complex_arr fft complex components array (re, im elements)
+ * @param indexed_magnitudes indexed magnitudes array
+ * @param n_samples number of data samples
+ * @param n_ms_elements number of most significant elements
+ * @return 0 OK
+ * @return -1 failed to malloc metadata buffer
  * @return -2 failed to prepare metadata buffer
  * @return -3 failed to malloc indices buffer
  * @return -4 failed to malloc magnitudes buffer
@@ -295,7 +477,7 @@ int fft_prepare_complex_buffer(uint8_t *complex_buffer, size_t complex_size, uin
  * @return -7 failed to UART write buffers
  * @return -8 failed to debug UART buffers
  */
-int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type *indexed_magnitudes, uint32_t n_samples, uint32_t n_ms_elements)
+int fft_send_ms_components_over_uart_debugging(float *fft_complex_arr, indexed_float_type *indexed_magnitudes, uint32_t n_samples, uint32_t n_ms_elements)
 {
     const char *TAG = "FFT SEND MSC UART";
     int error_code = 0;
@@ -347,7 +529,7 @@ int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type 
         goto memcleanup;
     }
 
-    if ((error_code = fft_prepare_magnitudes_buffer(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, indexed_magnitudes, n_ms_elements)) != 0)
+    if ((error_code = fft_prepare_indices_magnitudes_buffer_debugging(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, indexed_magnitudes, n_ms_elements)) != 0)
     {
         ESP_LOGI(TAG, "error -6, sub error %d", error_code);
         error_code = -6;
@@ -362,19 +544,19 @@ int fft_send_ms_components_over_uart(float *fft_complex_arr, indexed_float_type 
         goto memcleanup;
     }
 
-    if ((error_code = fft_uart_transmit_data(UART_NUM, metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
+    if ((error_code = fft_uart_transmit_data_debugging(UART_NUM, metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
     {
         ESP_LOGI(TAG, "error -8, sub error %d", error_code);
         error_code = -8;
         goto memcleanup;
     }
 
-    // if ((error_code = fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
-    // {
-    //     ESP_LOGE(TAG, "error -9, sub error %d", error_code);
-    //     error_code = -9;
-    //     goto memcleanup;
-    // }
+    if ((error_code = fft_debug_uart_buffers(metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
+    {
+        ESP_LOGE(TAG, "error -9, sub error %d", error_code);
+        error_code = -9;
+        goto memcleanup;
+    }
 memcleanup:
     if (metadata_buffer != NULL)
         free(metadata_buffer);
@@ -389,7 +571,7 @@ memcleanup:
 
 /**
  * @brief UART write metadata, indices and complex data buffers with distinct separator flags
- * 
+ *
  * @param metadata_buffer metadata holding the number of readings and the number of most significant components information
  * @param metadata_size size of metadata buffer
  * @param indices_buffer indices of ms components
@@ -402,49 +584,47 @@ memcleanup:
  * @return -3 failed to write indices buffer
  * @return -4 failed to write complex data buffer
  */
-int fft_uart_transmit_data(uart_port_t uart_num, uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size)
+int fft_uart_transmit_data_debugging(uart_port_t uart_num, uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *magnitudes_buffer, size_t magnitudes_size, uint8_t *complex_data_buffer, size_t complex_size)
 {
     if (metadata_buffer == NULL || indices_buffer == NULL || magnitudes_buffer == NULL || complex_data_buffer == NULL)
     {
         return -1;
     }
-    const char* TAG = "SEND FFT";
+    const char *TAG = "SEND FFT";
     esp_log_level_set(TAG, ESP_LOG_INFO);
     // ESP_LOGI(TAG, "metadata_size: %u, data_size: %u", metadata_size, data_size);
-    // Send metadata
+
+    // Send metadata (xfa)
     uart_write_bytes(uart_num, "\xfa\xfa\xfa\xfa\xff", 5); // Start of transmission
     if (uart_write_bytes(uart_num, (const char *)metadata_buffer, metadata_size) == -1)
     {
         return -2;
     }
     uart_write_bytes(uart_num, "\xff\xfa\xfa\xfa\xfa", 5); // End of transmission
-    uart_write_bytes(uart_num, "\n", 1);
-    // Send indices
+    
+    // Send indices (xfb)
     uart_write_bytes(uart_num, "\xfb\xfb\xfb\xfb\xff", 5); // Start of transmission
     if (uart_write_bytes(uart_num, (const char *)indices_buffer, indices_size) == -1)
     {
         return -3;
     }
     uart_write_bytes(uart_num, "\xff\xfb\xfb\xfb\xfb", 5); // End of transmission
-    uart_write_bytes(uart_num, "\n", 1);
 
-    // Send magnitudes
+    // Send complex data (xfc)
     uart_write_bytes(uart_num, "\xfc\xfc\xfc\xfc\xff", 5); // Start of transmission
-    if (uart_write_bytes(uart_num, magnitudes_buffer, magnitudes_size) == -1)
-    {
-        return -4;
-    }
-    uart_write_bytes(uart_num, "\xff\xfc\xfc\xfc\xfc", 5); // End of transmission
-    uart_write_bytes(uart_num, "\n", 1);
-    
-    // Send complex data
-    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xff", 5); // Start of transmission
     if (uart_write_bytes(uart_num, (const char *)complex_data_buffer, complex_size) == -1)
     {
         return -5;
     }
+    uart_write_bytes(uart_num, "\xff\xfc\xfc\xfc\xfc", 5); // End of transmission
+
+    // Send magnitudes (xfd)
+    uart_write_bytes(uart_num, "\xfd\xfd\xfd\xfd\xff", 5); // Start of transmission
+    if (uart_write_bytes(uart_num, magnitudes_buffer, magnitudes_size) == -1)
+    {
+        return -4;
+    }
     uart_write_bytes(uart_num, "\xff\xfd\xfd\xfd\xfd", 5); // End of transmission
-    uart_write_bytes(uart_num, "\n", 1);
     return 0;
 }
 
