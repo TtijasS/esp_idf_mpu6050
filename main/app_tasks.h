@@ -21,8 +21,8 @@
 // Task handles
 extern TaskHandle_t handl_mpu_sampling_begin;
 extern TaskHandle_t handl_fft_calculation;
-extern TaskHandle_t handl_uart_data_samples;
 extern TaskHandle_t handl_uart_fft_components;
+// extern TaskHandle_t handl_uart_data_samples;
 
 // Semaphores
 extern SemaphoreHandle_t semphr_sampling_request_a;

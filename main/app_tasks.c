@@ -2,8 +2,8 @@
 
 TaskHandle_t handl_mpu_sampling_begin;
 TaskHandle_t handl_fft_calculation;
-TaskHandle_t handl_uart_data_samples;
 TaskHandle_t handl_uart_fft_components;
+// TaskHandle_t handl_uart_data_samples;
 
 SemaphoreHandle_t semphr_sampling_request_a;
 SemaphoreHandle_t semphr_sampling_request_b;
@@ -112,14 +112,14 @@ void task_initialization(void *params)
 		ESP_LOGE(TAG, "Failed to create fft components uart transmission task");
 		vTaskDelete(NULL);
 	}
-	if (xTaskCreate(task_uart_data_samples, "Send data samples task", TASK_SEND_DATA_SAMPLES_STACK_SIZE, NULL, 10, &handl_uart_data_samples) != pdPASS)
-	{
-		ESP_LOGE(TAG, "Failed to create fft components uart transmission task");
-		vTaskDelete(NULL);
-	}
+	// if (xTaskCreate(task_uart_data_samples, "Send data samples task", TASK_SEND_DATA_SAMPLES_STACK_SIZE, NULL, 10, &handl_uart_data_samples) != pdPASS)
+	// {
+	// 	ESP_LOGE(TAG, "Failed to create fft components uart transmission task");
+	// 	vTaskDelete(NULL);
+	// }
 
 	// Init UART with ISR queue
-	if ((error_code = uart_init_with_isr_queue(&uart_config, UART_NUM, UART_TXD, UART_RXD, UART_TX_BUFF_SIZE, UART_RX_BUFF_SIZE, &queue_uart_event_queue, UART_EVENT_QUEUE_SIZE, 0)) != 0)
+	if ((error_code = myuart_init_with_isr_queue(&uart_config, UART_NUM, UART_TXD, UART_RXD, UART_TX_BUFF_SIZE, UART_RX_BUFF_SIZE, &queue_uart_event_queue, UART_EVENT_QUEUE_SIZE, 0)) != 0)
 	{
 		ESP_LOGE(TAG, "Failed to init uart with isr queue, error code %d", error_code);
 		vTaskDelete(NULL);
@@ -304,7 +304,8 @@ void task_uart_fft_components(void *params)
 		}
 
 		// ESP_LOGI(TAG, "FFT components sent");
-		xTaskNotifyGive(handl_uart_data_samples);
+		// xTaskNotifyGive(handl_uart_data_samples);
+		xSemaphoreGive(semphr_uart_request);
 	}
 }
 
@@ -333,13 +334,13 @@ void task_uart_data_samples(void *params)
 		}
 		uart_write_bytes(UART_NUM, "\xff\xfe\xfe\xfe\xfe", 5);
 
-		if (DEBUG_STACKS == 1)
-		{
-			UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-			ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-			ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_DATA_SAMPLES_STACK_SIZE - stack_hwm), TASK_SEND_DATA_SAMPLES_STACK_SIZE);
-			ESP_LOGI(TAG, "Data samples sent");
-		}
+		// if (DEBUG_STACKS == 1)
+		// {
+		// 	UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
+		// 	ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
+		// 	ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_DATA_SAMPLES_STACK_SIZE - stack_hwm), TASK_SEND_DATA_SAMPLES_STACK_SIZE);
+		// 	ESP_LOGI(TAG, "Data samples sent");
+		// }
 		xSemaphoreGive(semphr_uart_request);
 	}
 }
@@ -372,7 +373,7 @@ void task_uart_isr_monitoring(void *params)
 					ESP_LOGE(TAG, "Pattern index -1");
 					break;
 				}
-				if ((error_flag = uart_encapsulation_handler(UART_NUM, &encapsulation_counter, &pattern_index)) < 0)
+				if ((error_flag = myuart_encapsulation_handler(UART_NUM, &encapsulation_counter, &pattern_index)) < 0)
 				{
 					ESP_LOGE(TAG, "Uart encapsulation handler error %d", error_flag);
 				}
@@ -421,6 +422,8 @@ void task_queue_msg_handler(void *params)
 	// COMMON
 	const char *FFT = "FFT";
 	const char *FAIL = "FAIL";
+	const char *WHOAMI = "WHOAMI";
+	const char *DEVID = "MPU6050";
 	// When data is ready sampling task sends A DATRDY or B DATRDY
 	// When FFT is done calculating, fft task sends A FFTOK or B FFTOK
 
@@ -430,8 +433,13 @@ void task_queue_msg_handler(void *params)
 		{
 			if (enqueued_message.msg_ptr != NULL)
 			{
+				// WHOAMI
+				if (memcmp(enqueued_message.msg_ptr, WHOAMI, (strlen(WHOAMI))) == 0)
+				{
+					uart_write_bytes(UART_NUM, DEVID, strlen(DEVID));
+				}
 				// A START
-				if (memcmp(enqueued_message.msg_ptr, A_START, (strlen(A_START))) == 0)
+				else if (memcmp(enqueued_message.msg_ptr, A_START, (strlen(A_START))) == 0)
 				{
 					if (xSemaphoreTake(semphr_sampling_request_a, pdMS_TO_TICKS(10)) == pdTRUE)
 					{
