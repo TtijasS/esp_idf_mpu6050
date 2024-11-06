@@ -17,7 +17,10 @@
 void app_main(void)
 {
     const char *TAG = "MAIN APP";
-    esp_log_level_set(TAG, ESP_LOG_DEBUG);
+    ESP_LOGE(TAG, "LOG LVL ERROR");
+    ESP_LOGW(TAG, "LOG LVL WARNING");
+    ESP_LOGI(TAG, "LOG LVL INFO");
+    ESP_LOGD(TAG, "LOG LVL DEBUG");
 	
     if (xTaskCreatePinnedToCore(task_initialization, "Init task", TASK_INIT_STACK_SIZE, NULL, 10, NULL, tskNO_AFFINITY) != pdPASS)
     {

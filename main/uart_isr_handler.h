@@ -12,8 +12,8 @@
 #include "esp_log.h"
 #include "app_tasks.h"
 
-#define UART_BAUD 3000000
-#define UART_NUM UART_NUM_1
+#define UART_BAUD 460800
+#define UART_NUM UART_NUM_0
 #define UART_RX_BUFF_SIZE 1024
 #define UART_TX_BUFF_SIZE 0
 #define UART_EVENT_QUEUE_SIZE 10 /*!< Number of UART ISR events queued*/

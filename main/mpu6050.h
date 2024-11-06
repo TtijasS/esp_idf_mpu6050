@@ -10,6 +10,12 @@
 
 // Functions prototypes
 int mpu_initial_setup(i2cBufferType *);
+int mpu_wake_up_senzor(i2cBufferType *);
+int mpu_set_filter_freq(i2cBufferType *);
+int mpu_wake_up_senzor(i2cBufferType *);
+int mpu_set_accel_fullscale(i2cBufferType *);
+int mpu_set_gyro_fullscale(i2cBufferType *);
+int mpu_disable_fifo(i2cBufferType *);
 int mpu_transmit_receive(i2cBufferType *, uint8_t, uint8_t);
 int mpu_transmit(i2cBufferType *, uint8_t);
 void mpu_fifo_enable(i2cBufferType *);

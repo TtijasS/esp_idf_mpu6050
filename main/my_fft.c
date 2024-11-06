@@ -182,8 +182,7 @@ uint32_t fft_percentile_n_components(float percentile, uint32_t arr_len)
  */
 int fft_prepare_metadata_buffer(uint8_t *metadata_buffer, size_t metadata_size, uint32_t n_samples, uint32_t n_components)
 {
-    const char *TAG = "fft_prepare_metadata_buffer";
-    esp_log_level_set(TAG, ESP_LOG_INFO);
+    // const char *TAG = "fft_prepare_metadata_buffer";
 
     if (metadata_buffer == NULL)
     {
@@ -378,8 +377,7 @@ memcleanup:
  */
 int fft_uart_transmit_data(uart_port_t uart_num, uint8_t *metadata_buffer, size_t metadata_size, uint8_t *indices_buffer, size_t indices_size, uint8_t *complex_data_buffer, size_t complex_size)
 {
-    const char *TAG = "fft_uart_transmit_data";
-    esp_log_level_set(TAG, ESP_LOG_INFO);
+    // const char *TAG = "fft_uart_transmit_data";
 
     if (metadata_buffer == NULL || indices_buffer == NULL || complex_data_buffer == NULL)
     {
@@ -524,14 +522,14 @@ int fft_send_ms_components_over_uart_debugging(float *fft_complex_arr, indexed_f
 
     if ((error_code = fft_prepare_metadata_buffer(metadata_buffer, metadata_size, n_samples, n_ms_elements)) != 0)
     {
-        ESP_LOGI(TAG, "error -5, sub error %d", error_code);
+        ESP_LOGE(TAG, "error -5, sub error %d", error_code);
         error_code = -5;
         goto memcleanup;
     }
 
     if ((error_code = fft_prepare_indices_magnitudes_buffer_debugging(indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, indexed_magnitudes, n_ms_elements)) != 0)
     {
-        ESP_LOGI(TAG, "error -6, sub error %d", error_code);
+        ESP_LOGE(TAG, "error -6, sub error %d", error_code);
         error_code = -6;
         goto memcleanup;
         return -6;
@@ -539,14 +537,14 @@ int fft_send_ms_components_over_uart_debugging(float *fft_complex_arr, indexed_f
 
     if ((error_code = fft_prepare_complex_buffer(complex_buffer, complex_size, n_ms_elements, indexed_magnitudes, fft_complex_arr)) != 0)
     {
-        ESP_LOGI(TAG, "error -7, sub error %d", error_code);
+        ESP_LOGE(TAG, "error -7, sub error %d", error_code);
         error_code = -7;
         goto memcleanup;
     }
 
     if ((error_code = fft_uart_transmit_data_debugging(UART_NUM, metadata_buffer, metadata_size, indices_buffer, indices_size, magnitudes_buffer, magnitudes_size, complex_buffer, complex_size)) != 0)
     {
-        ESP_LOGI(TAG, "error -8, sub error %d", error_code);
+        ESP_LOGE(TAG, "error -8, sub error %d", error_code);
         error_code = -8;
         goto memcleanup;
     }
@@ -590,8 +588,7 @@ int fft_uart_transmit_data_debugging(uart_port_t uart_num, uint8_t *metadata_buf
     {
         return -1;
     }
-    const char *TAG = "SEND FFT";
-    esp_log_level_set(TAG, ESP_LOG_INFO);
+    // const char *TAG = "SEND FFT";
     // ESP_LOGI(TAG, "metadata_size: %u, data_size: %u", metadata_size, data_size);
 
     // Send metadata (xfa)
@@ -650,7 +647,7 @@ int fft_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8
 
     // construct back original values and print them
     printf("\n");
-    ESP_LOGI(TAG, "Metadata:");
+    ESP_LOGD(TAG, "Metadata:");
     for (int i = 0; i < metadata_size / sizeof(uint32_t); i++)
     {
         uint32_t tmp_value;
@@ -659,7 +656,7 @@ int fft_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8
     }
 
     printf("\n");
-    ESP_LOGI(TAG, "indices:");
+    ESP_LOGD(TAG, "indices:");
     for (int i = 0; i < (indices_size / sizeof(uint32_t)); i++)
     {
         memcpy(&tmp_u32t, &indices_buffer[i * sizeof(uint32_t)], sizeof(uint32_t));
@@ -667,7 +664,7 @@ int fft_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8
     }
 
     printf("\n");
-    ESP_LOGI(TAG, "Magnitudes:");
+    ESP_LOGD(TAG, "Magnitudes:");
     for (int i = 0; i < (magnitudes_size / sizeof(float)); i++)
     {
         memcpy(&tmp_f, &magnitudes_buffer[i * sizeof(float)], sizeof(float));
@@ -675,7 +672,7 @@ int fft_debug_uart_buffers(uint8_t *metadata_buffer, size_t metadata_size, uint8
     }
 
     printf("\n");
-    ESP_LOGI(TAG, "im, re, im, re, ...:");
+    ESP_LOGD(TAG, "im, re, im, re, ...:");
     for (int i = 0; i < complex_size / sizeof(float); i++)
     {
         memcpy(&tmp_f, &complex_data_buffer[i * sizeof(float)], sizeof(float));

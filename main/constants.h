@@ -31,10 +31,6 @@
 #define I2C_READ_BUFF_SIZE 14 // I2C max read buffer size
 #define I2C_WRITE_BUFF_SIZE 2 // i2c max write buffer size
 
-// UART CONFIGURATION
-#define UART_BAUD_RATE 3000000 // UART baud rate
-#define UART_BUFFER_SIZE 1024  // UART buffer size
-
 // MPU REGISTERS FOR COMMUNICATION
 #define MPU_ADR_REG 0x68	  // MPU6050 slave address
 #define MPU_WHO_AM_I_REG 0x75 // Reg adr - get "who am I" response
@@ -60,15 +56,16 @@
 // MPU SETTING MASKS
 #define MPU_FIFO_EN_MASK 0x78	 // Reg mask - use with MPU_FIFO_EN_REG; Enable gyro and acel in FIFO)
 #define MPU_FIFO_RESET_MASK 0x44 // Reg mask - use with MPU_USER_CTRL_REG; Reset FIFO and keep it enabled: 0x04 - fifo reset; 0x40 - fifo enable)
-#define MPU_FIFO_DISSABLE 0044 // Reg mask - use with MPU_USER_CTRL_REG; Reset FIFO and keep it dissabled: 0x04 - fifo reset; 0x40 - fifo enable)
+#define MPU_FIFO_DISSABLE 0044	 // Reg mask - use with MPU_USER_CTRL_REG; Reset FIFO and keep it dissabled: 0x04 - fifo reset; 0x40 - fifo enable)
 
 /**
  * @brief MPU FILTER FREQUENCY SETTINGS
  * @attention Uncomment one of the filter frequency settings
  *
  * Preprocessor macros to select the desired filter frequency.
- * If none are defined, it defaults to 260Hz.
+ * If none are defined, it defaults to setting 7 (dissabled DLPF)
  */
+// #define MPU_FILTER_FREQ_260Hz
 // #define MPU_FILTER_FREQ_188Hz
 // #define MPU_FILTER_FREQ_98Hz
 // #define MPU_FILTER_FREQ_42Hz
@@ -84,9 +81,12 @@
 #define MPU_FILTER_FREQ_MASK_20Hz 0x04	// 20Hz, 8.3ms delay
 #define MPU_FILTER_FREQ_MASK_10Hz 0x05	// 10Hz, 13.8ms delay
 #define MPU_FILTER_FREQ_MASK_5Hz 0x06	// 5Hz, 19ms delay
+#define MPU_FILTER_DISSABLED 0x07		// dissable DLPF
 
 // Determine which filter frequency mask to use based on the defined preprocessor macro
-#if defined(MPU_FILTER_FREQ_188Hz)
+#if defined(MPU_FILTER_FREQ_260Hz)
+#define MPU_FILTER_FREQ_MASK MPU_FILTER_FREQ_MASK_260Hz
+#elif defined(MPU_FILTER_FREQ_188Hz)
 #define MPU_FILTER_FREQ_MASK MPU_FILTER_FREQ_MASK_188Hz
 #elif defined(MPU_FILTER_FREQ_98Hz)
 #define MPU_FILTER_FREQ_MASK MPU_FILTER_FREQ_MASK_98Hz
@@ -99,7 +99,7 @@
 #elif defined(MPU_FILTER_FREQ_5Hz)
 #define MPU_FILTER_FREQ_MASK MPU_FILTER_FREQ_MASK_5Hz
 #else
-#define MPU_FILTER_FREQ_MASK MPU_FILTER_FREQ_MASK_260Hz
+#define MPU_FILTER_FREQ_MASK MPU_FILTER_DISSABLED
 #endif
 
 // ---------- ACCELEROMETER FULL SCALE SETTINGS ----------

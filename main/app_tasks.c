@@ -28,7 +28,6 @@ float *fft_complex_arr;
 void task_initialization(void *params)
 {
 	const char *TAG = "TSK INIT";
-	// esp_log_level_set(TAG, ESP_LOG_INFO);
 
 	int error_code = 0;
 
@@ -150,8 +149,8 @@ void task_initialization(void *params)
 	if (DEBUG_STACKS == 1)
 	{
 		UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-		ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-		ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_INIT_STACK_SIZE - stack_hwm), TASK_INIT_STACK_SIZE);
+		ESP_LOGD(TAG, "Free stack size: %u B", stack_hwm);
+		ESP_LOGD(TAG, "Stack in use: %u of %u B", (TASK_INIT_STACK_SIZE - stack_hwm), TASK_INIT_STACK_SIZE);
 	}
 
 	vTaskDelete(NULL);
@@ -163,8 +162,7 @@ void task_mpu6050_data_sampling(void *params)
 	const char *MSG_A_RDY = "A DATRDY";	 // Data samples A ready
 	const char *MSG_B_RDY = "B DATRDY";	 // Data samples B ready
 	const char *MPU_ERR_MSG = "MPU ERR"; // MPU reading data error
-	esp_log_level_set(TAG, ESP_LOG_ERROR);
-	UBaseType_t old_free_heap = 0;
+	// UBaseType_t old_free_heap = 0;
 
 	size_t index_a = 0;
 	size_t index_b = 0;
@@ -236,7 +234,6 @@ void task_mpu6050_data_sampling(void *params)
 void task_fft_calculation(void *params)
 {
 	const char *TAG = "TSK FFT CALC";
-	esp_log_level_set(TAG, ESP_LOG_ERROR);
 	const char *MSG_A_RDY = "A FFTRDY"; // FFT data A ready
 	const char *MSG_B_RDY = "B FFTRDY"; // FFT data B ready
 	FFTQueueMessage_type data_in_queue;
@@ -261,8 +258,8 @@ void task_fft_calculation(void *params)
 			if (DEBUG_STACKS == 1)
 			{
 				UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-				ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-				ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_FFT_CALC_STACK_SIZE - stack_hwm), TASK_FFT_CALC_STACK_SIZE);
+				ESP_LOGD(TAG, "Free stack size: %u B", stack_hwm);
+				ESP_LOGD(TAG, "Stack in use: %u of %u B", (TASK_FFT_CALC_STACK_SIZE - stack_hwm), TASK_FFT_CALC_STACK_SIZE);
 			}
 
 			if (data_in_queue.array_number == 0)
@@ -285,7 +282,6 @@ void task_fft_calculation(void *params)
 void task_uart_fft_components(void *params)
 {
 	const char *TAG = "T FFT SEND COMP";
-	esp_log_level_set(TAG, ESP_LOG_ERROR);
 
 	while (1)
 	{
@@ -299,8 +295,8 @@ void task_uart_fft_components(void *params)
 		if (DEBUG_STACKS == 1)
 		{
 			UBaseType_t stack_hwm = uxTaskGetStackHighWaterMark(NULL);
-			ESP_LOGI(TAG, "Free stack size: %u B", stack_hwm);
-			ESP_LOGI(TAG, "Stack in use: %u of %u B", (TASK_SEND_FFT_STACK_SIZE - stack_hwm), TASK_SEND_FFT_STACK_SIZE);
+			ESP_LOGD(TAG, "Free stack size: %u B", stack_hwm);
+			ESP_LOGD(TAG, "Stack in use: %u of %u B", (TASK_SEND_FFT_STACK_SIZE - stack_hwm), TASK_SEND_FFT_STACK_SIZE);
 		}
 
 		// ESP_LOGI(TAG, "FFT components sent");
@@ -311,8 +307,7 @@ void task_uart_fft_components(void *params)
 
 void task_uart_data_samples(void *params)
 {
-	const char *TAG = "TSK SEND DATA";
-	esp_log_level_set(TAG, ESP_LOG_ERROR);
+	// const char *TAG = "TSK SEND DATA";
 
 	while (1)
 	{
@@ -384,7 +379,7 @@ void task_uart_isr_monitoring(void *params)
 			}
 		}
 	}
-	ESP_LOGW(TAG, "KILLING THE UART ISR TASK");
+	ESP_LOGE(TAG, "KILLING THE UART ISR TASK");
 	vTaskDelete(NULL);
 }
 

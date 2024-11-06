@@ -27,8 +27,7 @@ uart_config_t uart_config = {
  */
 int myuart_init_with_isr_queue(uart_config_t *uart_config, uart_port_t port_num, int gpio_tx, int gpio_rx, int tx_buff_size, int rx_buff_size, QueueHandle_t *isr_queue_handle, int isr_queue_size, int intr_alloc_flags)
 {
-	const char *TAG = "UART INIT WITH Q";
-	esp_log_level_set(TAG, ESP_LOG_ERROR);
+	// const char *TAG = "UART INIT WITH Q";
 
 	int error_code = 0; // used for debugging
 	// Create the ISR queue
@@ -237,7 +236,7 @@ int myuart_encapsulation_handler(uart_port_t uart_num, int *encap_state, int *pa
 		}
 		else
 		{
-			ESP_LOGE(TAG, "Bad start flag");
+			ESP_LOGD(TAG, "Bad start flag");
 			error_code = -1; // Error code for bad start flag
 			goto memcleanup;
 		}
@@ -248,7 +247,7 @@ int myuart_encapsulation_handler(uart_port_t uart_num, int *encap_state, int *pa
 
 		if (tmp_message_size < 1)
 		{
-			ESP_LOGE(TAG, "Message size %d is less than 1", tmp_message_size);
+			ESP_LOGD(TAG, "Message size %d is less than 1", tmp_message_size);
 			error_code = -2; // Error code for invalid message size
 			goto memcleanup;
 		}
@@ -287,7 +286,7 @@ int myuart_encapsulation_handler(uart_port_t uart_num, int *encap_state, int *pa
 		}
 		else
 		{
-			ESP_LOGE(TAG, "Bad stop flag");
+			ESP_LOGD(TAG, "Bad stop flag");
 			error_code = -7; // Error code for failed stop flag
 		}
 		break;
